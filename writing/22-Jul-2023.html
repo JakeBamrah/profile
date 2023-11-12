@@ -4,6 +4,9 @@
         <title>Jake—CV</title>
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="description" content="820 🌚 and things...">
+        <meta http-equiv="Cache-Control" content="max-age=0, must-revalidate"/>
+        <meta http-equiv="Pragma" content="no-cache"/>
+        <meta http-equiv="Expires" content="0" />
         <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦦</text></svg>">
         <style>
             body {
@@ -46,6 +49,7 @@
             a.footer-url { margin-right: 1em; }
             .ref-url { line-height: 0.8em; }
             .writing-header { text-align: left; }
+
             code {
                 background-color: #e6e6e6;
                 padding: 0 2;
@@ -104,7 +108,7 @@
             about the Typescript and Svelte ecosystem by using them in a
             (simple) production environment along with maintenance and
             improvements, if there were any. Svelte was such a positive
-            experience in fact, that I went on to build a much larger project¹,
+            experience in fact, that I went on to build a much larger project<a href="#1"><sup>[1]</sup></a>,
             something I didn't end up deploying but learned a lot from.
         </p>
         <p>
@@ -115,11 +119,12 @@
             strongly about simplicity than ever before (both in work and life)
             and I continue to whittle away at performance oriented design in my
             projects. I have gone back to basics with this attempt, pure HTML,
-            sparing use of CSS² and most notably, <i>no javascript</i>. The aim
+            sparing use of CSS<a href="#2"><sup>[2]</sup></a>.
+ and most notably, <i>no javascript</i>. The aim
             was to improve <i>time-to-first-byte</i> by keeping each page well
             below 14KB (~2-3KB raw) and embedding the HTML and CSS into a single
             file (this avoids chunked transfer-encoding and ensures that the
-            entire page is delivered in the first packet of HTML)³.
+            entire page is delivered in the first packet of HTML)<a href="#3"><sup>[3]</sup></a>.
         </p>
         <p>
             What stood out to me most here, is that you quickly realise just how
@@ -127,7 +132,8 @@
             each file to a single page, I found HTML duplication to be a
             problem. In order to avoid this (repeating the same CSS and headers
             per page), I decided to throw together a quick and dirty HTML
-            template-engine, aptly named <i>Temple</i>⁴. This was an attempt to
+            template-engine, aptly named <i>Temple</i><a href="#4"><sup>[4]</sup></a>.
+. This was an attempt to
             build a proof-of-concept that implemented the absolute
             <i>minimum</i> templating syntax required to get this project up and
             running. A quick look at the code will reveal that I have committed
@@ -143,10 +149,10 @@
             delivered a little bit quicker than before, whether that's a good or
             bad thing remains to be seen...
         </p>
-        <p class="ref-url"><a href="https://github.com/JakeBamrah/ratrace">[1] ratrace</a></p>
-        <p class="ref-url"><a href="https://perfectmotherfuckingwebsite.com/">[2] Perfect mf website :)</a></p>
-        <p class="ref-url"><a href="https://developer.mozilla.org/en-US/docs/Web/Performance/How_browsers_work#response">[3] MDN: How browsers work</a></p>
-        <p class="ref-url"><a href="https://github.com/JakeBamrah/temple">[4] temple</a></p>
+        <p class="ref-url" id="1"><a href="https://github.com/JakeBamrah/ratrace">[1] ratrace</a></p>
+        <p class="ref-url" id="2"><a href="https://perfectmotherfuckingwebsite.com/">[2] Perfect mf website :)</a></p>
+        <p class="ref-url" id="3"><a href="https://developer.mozilla.org/en-US/docs/Web/Performance/How_browsers_work#response">[3] MDN: How browsers work</a></p>
+        <p class="ref-url" id="4"><a href="https://github.com/JakeBamrah/temple">[4] temple</a></p>
 
 
         <p class="footer">Built with <a href="https://github.com/JakeBamrah/temple">Temple</a></p>
