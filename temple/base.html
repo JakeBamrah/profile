@@ -35,6 +35,10 @@
                 background-size: contain;
                 border-radius: 50%;
             }
+            span.math {
+                font-style: italic;
+                font-family: Times New Roman;
+            }
             a.main-url {
                 color: #555;
                 margin-right: 1em;
@@ -42,11 +46,17 @@
             a.footer-url { margin-right: 1em; }
             .ref-url { line-height: 0.8em; }
             .writing-header { text-align: left; }
+            code {
+                background-color: #e6e6e6;
+                padding: 0 2;
+                border-radius: 0.2em;
+            }
 
             @media (prefers-color-scheme: dark) {
-                body { color: #ddd; background: #222}
-                a:link{ color: #ddd }
-                a:visited{ color: #666 }
+                body { color: #ddd; background: #222; }
+                a:link{ color: #ddd; }
+                a:visited{ color: #666; }
+                code { background-color: #333; }
                 h1,h2,h3,strong { color: #fff; }
                 a.main-url { color: #fff; }
                 .footer { color: #666 }
