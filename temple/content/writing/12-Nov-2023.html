@@ -2,7 +2,7 @@
     {% block body %}
         <h2 class="writing-header">Writing a more efficient orderbook</h2>
         <p>
-        It's been just over a year since I last wrote a simple order-book<a href="#1"><sup>[1]</sup></a> and
+        It's been just over a year since I last wrote a simple order-book<a id="ref-1" href="#1"><sup>[1]</sup></a> and
         recently, I've decided it would be a good idea to make another attempt at
         writing one over a weekend to see how my general knowledge of C and
         data-structures have improved. My original motivation for this project was to
@@ -17,12 +17,13 @@
         bottleneck for an exchange.
         </p>
 
+        <h3 class="writing-header">What does an efficient orderbook look like?</h2>
         <p>
         Before evaluating my original implementation along with the changes made in my
         second attempt, I'll quickly explain some of the requirements expected of an
-        order-book<a href="#2"><sup>[2]</sup></a>. We should aim to implement order operations such as <code>add</code>,
+        order-book<a id="ref-2" href="#2"><sup>[2]</sup></a>. We should aim to implement order operations such as <code>add</code>,
         <code>cancel</code> and <code>execute</code> in <span class="math">O(1)</span> time. Notably,
-        wkselph<a href="#2"><sup>[2]</sup></a> raises an interesting
+        wkselph<a id="ref-2" href="#2"><sup>[2]</sup></a> raises an interesting
         point, stating that your most common operations are going to be adds and
         cancels, with executions coming a distant third. This will be an important point
         to consider later on. With regards to limit operations, it's important to ensure
@@ -33,6 +34,7 @@
         and orders should be accessible in <span class="math">O(1)</span> time respectively.
         </p>
 
+        <h3 class="writing-header">My attempts</h2>
         <p>
         For my first attempt, I managed to cobble together a very basic matching-engine
         that handled FIFO order execution using limit and market orders. Despite
@@ -69,7 +71,7 @@
         flexible in times of excessive price-volatility as the price-point range is
         now fixed rather than dynamic—and allows limits and orders to be accessed
         (sequentially if we're lucky) in <span class="math">O(1)</span> time respectively. Limits are stored
-        in priority-queues<a href="#3"><sup>[3]</sup></a> using their price-points only, which means that we maintain a
+        in priority-queues<a id="ref-3" href="#3"><sup>[3]</sup></a> using their price-points only, which means that we maintain a
         sorted order of active bid and ask limits in <span class="math">O(logm)</span> time. This also allows
         us to retain our top-of-book access times at <span class="math">O(1)</span> too!
         </p>
@@ -85,10 +87,11 @@
         spatial and temporal locality). Similar to the limit arena, we are limited to
         the number of orders we can support for a given ticker-symbol, but this can be
         resized on a per-symbol-basis based on expected volume. Finally, all structs
-        have been packed to reduce memory slop<a href="#4"><sup>[4]</sup></a>
-        <a href="#5"><sup>[5]</sup></a>.
+        have been packed to reduce memory slop<a id="ref-4" href="#4"><sup>[4]</sup></a>
+        <a id="ref-5" href="#5"><sup>[5]</sup></a>.
         </p>
 
+        <h3 class="writing-header">Looking ahead</h2>
         <p>
         Ultimately, the final result came out quite well for a short weekend project
         and served as a nice intro into arena allocation, structure-packing and
@@ -103,27 +106,42 @@
         </p>
 
         <p class="ref-url">
+            <a href="#ref-1">
+                [1]
+            </a>
             <a id="1" href="https://github.com/JakeBamrah/simple-orderbook">
-                [1] Simple order-book
+                Simple order-book
             </a>
         <p class="ref-url">
+            <a href="#ref-2">
+                [2]
+            </a>
             <a id="2" href="https://web.archive.org/web/20110219163448/http://howtohft.wordpress.com/2011/02/15/how-to-build-a-fast-limit-order-book/">
-                [2] How to build a fast limit order-book
+                How to build a fast limit order-book
             </a>
         </p>
         <p class="ref-url">
+            <a href="#ref-3">
+                [3]
+            </a>
             <a id="3" href="https://pages.cs.wisc.edu/~vernon/cs367/notes/11.PRIORITY-Q.html">
-                [3] Priority queues
+                Priority queues
             </a>
         </p>
         <p class="ref-url">
+            <a href="#ref-4">
+                [4]
+            </a>
             <a id="4" href="https://akkadia.org/drepper/cpumemory.pdf">
-                [4] What every programmer should know about memory
+                What every programmer should know about memory
             </a>
         </p>
         <p class="ref-url">
+            <a href="#ref-5">
+                [5]
+            </a>
             <a id="5" href="http://www.catb.org/esr/structure-packing/">
-                [5] The lost art of structure packing
+                The lost art of structure packing
             </a>
         </p>
     {% endblock %}
