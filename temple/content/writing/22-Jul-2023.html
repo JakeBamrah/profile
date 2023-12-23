@@ -1,84 +1,83 @@
-{% extends "../base.html" %}
-    {% block body %}
-        <h2 class="writing-header">Rebuilding this website again...</h2>
-        <p>
-            The original intention of this website was to document what I've
-            been working on. I do this not for others, but purely for myself,
-            as a means of summarising what I've learned and to reflect on the
-            outcome of my work / life / whatever really, as it unfolds. It's
-            also a useful way to hold myself accountable for the ideas that
-            I've started. The (big) caveat here is that articulating your
-            thoughts out in the open can be intimidating, even if I end up being
-            the only one reading them. It provokes a sense of vulnerability and
-            I'm not sure why. It's probably of no surprise to any of us then,
-            that the initial intentions of this project have not yet been
-            realised, and it's ended up serving as another form of
-            procrastination rather than a means for expressing myself...
-        </p>
-        <p>
-            Anyways, this is the third re-write of this thing—each time a little
-            more pared back than the attempt before it—the first iteration used
-            react and typescript to provide a whole load of unnecessary features
-            (self-served fonts, copious amounts of css and questionable design).
-            As you can imagine, this attempt was bloated, completely
-            over-engineered and honestly, not an accurate reflection of myself
-            (hindsight can be cruel 😂). The
-            <a href="https://old.bamrah.sh/">second attempt</a> was a complete
-            re-write of the original functionality using web-components (Svelte)
-            and Tailwind—custom fonts now removed, brotli
-            compression instead of gzip—the weight-loss was in full-swing. It
-            was by this point that I was becoming increasingly aware of the
-            performance (or lack of) in modern software and so, with this
-            attempt I managed to trim 90% from the website's original footprint
-            (400KB → 35KB compressed). For a simple text portfolio, I would
-            still call this bloated, but on reflection, I learned quite a lot
-            about the Typescript and Svelte ecosystem by using them in a
-            (simple) production environment along with maintenance and
-            improvements, if there were any. Svelte was such a positive
-            experience in fact, that I went on to build a much larger project<a href="#1"><sup>[1]</sup></a>,
-            something I didn't end up deploying but learned a lot from.
-        </p>
-        <p>
-            We're now ~2 years after inception (and with very little written),
-            I have just spent 1-2 days throwing together this iteration after
-            work. New experiences since my last attempt have materialised as a
-            change in perspective and my priorities have shifted. I feel more
-            strongly about simplicity than ever before (both in work and life)
-            and I continue to whittle away at performance oriented design in my
-            projects. I have gone back to basics with this attempt, pure HTML,
-            sparing use of CSS<a href="#2"><sup>[2]</sup></a>.
- and most notably, <i>no javascript</i>. The aim
-            was to improve <i>time-to-first-byte</i> by keeping each page well
-            below 14KB (~2-3KB raw) and embedding the HTML and CSS into a single
-            file (this avoids chunked transfer-encoding and ensures that the
-            entire page is delivered in the first packet of HTML)<a href="#3"><sup>[3]</sup></a>.
-        </p>
-        <p>
-            What stood out to me most here, is that you quickly realise just how
-            much work these frameworks do for you and with my goal of keeping
-            each file to a single page, I found HTML duplication to be a
-            problem. In order to avoid this (repeating the same CSS and headers
-            per page), I decided to throw together a quick and dirty HTML
-            template-engine, aptly named <i>Temple</i><a href="#4"><sup>[4]</sup></a>.
+{{ extends ../../base.html }}
+{% insert body %}
+    <h2 class="writing-header">Rebuilding this website again...</h2>
+    <p>
+        The original intention of this website was to document what I've
+        been working on. I do this not for others, but purely for myself,
+        as a means of summarising what I've learned and to reflect on the
+        outcome of my work / life / whatever really, as it unfolds. It's
+        also a useful way to hold myself accountable for the ideas that
+        I've started. The (big) caveat here is that articulating your
+        thoughts out in the open can be intimidating, even if I end up being
+        the only one reading them. It provokes a sense of vulnerability and
+        I'm not sure why. It's probably of no surprise to any of us then,
+        that the initial intentions of this project have not yet been
+        realised, and it's ended up serving as another form of
+        procrastination rather than a means for expressing myself...
+    </p>
+    <p>
+        Anyways, this is the third re-write of this thing—each time a little
+        more pared back than the attempt before it—the first iteration used
+        react and typescript to provide a whole load of unnecessary features
+        (self-served fonts, copious amounts of css and questionable design).
+        As you can imagine, this attempt was bloated, completely
+        over-engineered and honestly, not an accurate reflection of myself
+        (hindsight can be cruel 😂). The
+        <a href="https://old.bamrah.sh/">second attempt</a> was a complete
+        re-write of the original functionality using web-components (Svelte)
+        and Tailwind—custom fonts now removed, brotli
+        compression instead of gzip—the weight-loss was in full-swing. It
+        was by this point that I was becoming increasingly aware of the
+        performance (or lack of) in modern software and so, with this
+        attempt I managed to trim 90% from the website's original footprint
+        (400KB → 35KB compressed). For a simple text portfolio, I would
+        still call this bloated, but on reflection, I learned quite a lot
+        about the Typescript and Svelte ecosystem by using them in a
+        (simple) production environment along with maintenance and
+        improvements, if there were any. Svelte was such a positive
+        experience in fact, that I went on to build a much larger project<a href="#1"><sup>[1]</sup></a>,
+        something I didn't end up deploying but learned a lot from.
+    </p>
+    <p>
+        We're now ~2 years after inception (and with very little written),
+        I have just spent 1-2 days throwing together this iteration after
+        work. New experiences since my last attempt have materialised as a
+        change in perspective and my priorities have shifted. I feel more
+        strongly about simplicity than ever before (both in work and life)
+        and I continue to whittle away at performance oriented design in my
+        projects. I have gone back to basics with this attempt, pure HTML,
+        sparing use of CSS<a href="#2"><sup>[2]</sup></a>.
+and most notably, <i>no javascript</i>. The aim
+        was to improve <i>time-to-first-byte</i> by keeping each page well
+        below 14KB (~2-3KB raw) and embedding the HTML and CSS into a single
+        file (this avoids chunked transfer-encoding and ensures that the
+        entire page is delivered in the first packet of HTML)<a href="#3"><sup>[3]</sup></a>.
+    </p>
+    <p>
+        What stood out to me most here, is that you quickly realise just how
+        much work these frameworks do for you and with my goal of keeping
+        each file to a single page, I found HTML duplication to be a
+        problem. In order to avoid this (repeating the same CSS and headers
+        per page), I decided to throw together a quick and dirty HTML
+        template-engine, aptly named <i>Temple</i><a href="#4"><sup>[4]</sup></a>.
 . This was an attempt to
-            build a proof-of-concept that implemented the absolute
-            <i>minimum</i> templating syntax required to get this project up and
-            running. A quick look at the code will reveal that I have committed
-            the cardinal sin of template-engines, <i>parsing HTML using regular
-            expressions</i> (forgive me! 🙏🏼), however, I have a lofty goal to
-            re-write this project using tokens and a simple lexer ;). I find
-            coming up with new ideas quite difficult, and what I've liked about
-            this project is that it all kind of happened organically. I'm
-            excited to explore lexers and I'm excited to write some meaningful C
-            | Rust. Wrapping it all up, I'm quite happy with the outcome and I
-            learned more than I anticipated. I no longer have an excuse to avoid
-            dumping my thoughts onto the internet, and the messages will get
-            delivered a little bit quicker than before, whether that's a good or
-            bad thing remains to be seen...
-        </p>
-        <p class="ref-url" id="1"><a href="https://github.com/JakeBamrah/ratrace">[1] ratrace</a></p>
-        <p class="ref-url" id="2"><a href="https://perfectmotherfuckingwebsite.com/">[2] Perfect mf website :)</a></p>
-        <p class="ref-url" id="3"><a href="https://developer.mozilla.org/en-US/docs/Web/Performance/How_browsers_work#response">[3] MDN: How browsers work</a></p>
-        <p class="ref-url" id="4"><a href="https://github.com/JakeBamrah/temple">[4] temple</a></p>
-    {% endblock %}
+        build a proof-of-concept that implemented the absolute
+        <i>minimum</i> templating syntax required to get this project up and
+        running. A quick look at the code will reveal that I have committed
+        the cardinal sin of template-engines, <i>parsing HTML using regular
+        expressions</i> (forgive me! 🙏🏼), however, I have a lofty goal to
+        re-write this project using tokens and a simple lexer ;). I find
+        coming up with new ideas quite difficult, and what I've liked about
+        this project is that it all kind of happened organically. I'm
+        excited to explore lexers and I'm excited to write some meaningful C
+        | Rust. Wrapping it all up, I'm quite happy with the outcome and I
+        learned more than I anticipated. I no longer have an excuse to avoid
+        dumping my thoughts onto the internet, and the messages will get
+        delivered a little bit quicker than before, whether that's a good or
+        bad thing remains to be seen...
+    </p>
+    <p class="ref-url" id="1"><a href="https://github.com/JakeBamrah/ratrace">[1] ratrace</a></p>
+    <p class="ref-url" id="2"><a href="https://perfectmotherfuckingwebsite.com/">[2] Perfect mf website :)</a></p>
+    <p class="ref-url" id="3"><a href="https://developer.mozilla.org/en-US/docs/Web/Performance/How_browsers_work#response">[3] MDN: How browsers work</a></p>
+    <p class="ref-url" id="4"><a href="https://github.com/JakeBamrah/temple">[4] temple</a></p>
 {% endblock %}

@@ -1,148 +1,147 @@
-{% extends "../base.html" %}
-    {% block body %}
-        <h2 class="writing-header">Writing a more efficient orderbook</h2>
-        <p>
-        It's been just over a year since I last wrote a simple order-book<a id="ref-1" href="#1"><sup>[1]</sup></a> and
-        recently, I've decided it would be a good idea to make another attempt at
-        writing one over a weekend to see how my general knowledge of C and
-        data-structures have improved. My original motivation for this project was to
-        get a grasp of some basic C++ syntax while exploring some of the core mechanics
-        behind market-making systems. While I believe matching-engine patterns are
-        mostly a solved problem in software (where your edge is more likely to come from
-        hardware rather than software), building one encourages you to think critically
-        of your data-structure choices while being considerate of the memory-footprint
-        around such structures. The need for efficiency is due to the fact that
-        matching-engines must handle order-matching sequentially
-        (handling 100,000's of messages per second) and as such, can quickly become a
-        bottleneck for an exchange.
-        </p>
+{{ extends ../../base.html }}
+{% insert body %}
+    <h2 class="writing-header">Writing a more efficient orderbook</h2>
+    <p>
+    It's been just over a year since I last wrote a simple order-book<a id="ref-1" href="#1"><sup>[1]</sup></a> and
+    recently, I've decided it would be a good idea to make another attempt at
+    writing one over a weekend to see how my general knowledge of C and
+    data-structures have improved. My original motivation for this project was to
+    get a grasp of some basic C++ syntax while exploring some of the core mechanics
+    behind market-making systems. While I believe matching-engine patterns are
+    mostly a solved problem in software (where your edge is more likely to come from
+    hardware rather than software), building one encourages you to think critically
+    of your data-structure choices while being considerate of the memory-footprint
+    around such structures. The need for efficiency is due to the fact that
+    matching-engines must handle order-matching sequentially
+    (handling 100,000's of messages per second) and as such, can quickly become a
+    bottleneck for an exchange.
+    </p>
 
-        <h3 class="writing-header">What does an efficient orderbook look like?</h2>
-        <p>
-        Before evaluating my original implementation along with the changes made in my
-        second attempt, I'll quickly explain some of the requirements expected of an
-        order-book<a id="ref-2" href="#2"><sup>[2]</sup></a>. We should aim to implement order operations such as <code>add</code>,
-        <code>cancel</code> and <code>execute</code> in <span class="math">O(1)</span> time. Notably,
-        wkselph<a id="ref-2" href="#2"><sup>[2]</sup></a> raises an interesting
-        point, stating that your most common operations are going to be adds and
-        cancels, with executions coming a distant third. This will be an important point
-        to consider later on. With regards to limit operations, it's important to ensure
-        that the top of the book (min-asks/max-bids) are tracked in <span class="math">O(1)</span> time—allowing new
-        orders crossing the order-book to be matched with their opposition
-        (min-ask or max-bid) as quickly as possible—and limit volumes should be tracked
-        so that order-book volume can be discovered efficiently. Both individual limits
-        and orders should be accessible in <span class="math">O(1)</span> time respectively.
-        </p>
+    <h3 class="writing-header">What does an efficient orderbook look like?</h2>
+    <p>
+    Before evaluating my original implementation along with the changes made in my
+    second attempt, I'll quickly explain some of the requirements expected of an
+    order-book<a id="ref-2" href="#2"><sup>[2]</sup></a>. We should aim to implement order operations such as <code>add</code>,
+    <code>cancel</code> and <code>execute</code> in <span class="math">O(1)</span> time. Notably,
+    wkselph<a id="ref-2" href="#2"><sup>[2]</sup></a> raises an interesting
+    point, stating that your most common operations are going to be adds and
+    cancels, with executions coming a distant third. This will be an important point
+    to consider later on. With regards to limit operations, it's important to ensure
+    that the top of the book (min-asks/max-bids) are tracked in <span class="math">O(1)</span> time—allowing new
+    orders crossing the order-book to be matched with their opposition
+    (min-ask or max-bid) as quickly as possible—and limit volumes should be tracked
+    so that order-book volume can be discovered efficiently. Both individual limits
+    and orders should be accessible in <span class="math">O(1)</span> time respectively.
+    </p>
 
-        <h3 class="writing-header">My attempts</h2>
-        <p>
-        For my first attempt, I managed to cobble together a very basic matching-engine
-        that handled FIFO order execution using limit and market orders. Despite
-        learning a lot from this attempt, I struggled to yield an efficient
-        implementation and my choice of data-structures had quite a negative impact on
-        performance. For example, limits were stored using a hash-map, with each <code>limit</code>
-        being keyed by it's price point (allowing limit and order adds in <span class="math">O(1)</span> time).
-        A benefit of using hash-maps to track price-points is that we can accommodate
-        large gaps between limits, so sparsely populated books will consume less memory.
-        This allows times of price-volatility to be handled conveniently too, however,
-        all of this comes at the cost of dynamic allocation. While limits were tracked
-        using a map, orders were allocated at runtime and stored in a doubly-linked-list
-        under each limit. This made tracking orders difficult, where removing an order
-        would take <span class="math">O(n)</span> time
-        (<span class="math">n</span> representing the total number of orders and
-        <span class="math">m</span> being total limits). From an implementation
-        perspective, using these data-structures kept the code very simple,
-        however, the penance for taking the easier route here was that most
-        (if not all) of the critical objects involved in this engine were
-        <b>heap-allocated</b>.
-        </p>
+    <h3 class="writing-header">My attempts</h2>
+    <p>
+    For my first attempt, I managed to cobble together a very basic matching-engine
+    that handled FIFO order execution using limit and market orders. Despite
+    learning a lot from this attempt, I struggled to yield an efficient
+    implementation and my choice of data-structures had quite a negative impact on
+    performance. For example, limits were stored using a hash-map, with each <code>limit</code>
+    being keyed by it's price point (allowing limit and order adds in <span class="math">O(1)</span> time).
+    A benefit of using hash-maps to track price-points is that we can accommodate
+    large gaps between limits, so sparsely populated books will consume less memory.
+    This allows times of price-volatility to be handled conveniently too, however,
+    all of this comes at the cost of dynamic allocation. While limits were tracked
+    using a map, orders were allocated at runtime and stored in a doubly-linked-list
+    under each limit. This made tracking orders difficult, where removing an order
+    would take <span class="math">O(n)</span> time
+    (<span class="math">n</span> representing the total number of orders and
+    <span class="math">m</span> being total limits). From an implementation
+    perspective, using these data-structures kept the code very simple,
+    however, the penance for taking the easier route here was that most
+    (if not all) of the critical objects involved in this engine were
+    <b>heap-allocated</b>.
+    </p>
 
-        <p>
-        This brings me to my second attempt that I quickly hacked together over the
-        weekend. Being a year since my last approach, I've had some time to reflect on
-        how I can make a better attempt at the original implementation. Something I would like to focus on with this attempt
-        is to <i>try</i> and keep all object initialisation static, improving the runtime
-        complexity for locating orders and to provide a more optimal way of sorting
-        ask/bid limits. All of the above was written in C during this attempt, which
-        mean't that many of the required data-structures needed to be built from
-        scratch. To achieve this, orders and limits are now initialised in pre-defined
-        arenas (arrays) which are fixed in size. Limits are keyed into the arena using
-        their price-point as the key—this comes with the disadvantage of being less
-        flexible in times of excessive price-volatility as the price-point range is
-        now fixed rather than dynamic—and allows limits and orders to be accessed
-        (sequentially if we're lucky) in <span class="math">O(1)</span> time respectively. Limits are stored
-        in priority-queues<a id="ref-3" href="#3"><sup>[3]</sup></a> using their price-points only, which means that we maintain a
-        sorted order of active bid and ask limits in <span class="math">O(logm)</span> time. This also allows
-        us to retain our top-of-book access times at <span class="math">O(1)</span> too!
-        </p>
-        <img style="width:100%;" src="data:image/webp;base64,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" alt="" />
+    <p>
+    This brings me to my second attempt that I quickly hacked together over the
+    weekend. Being a year since my last approach, I've had some time to reflect on
+    how I can make a better attempt at the original implementation. Something I would like to focus on with this attempt
+    is to <i>try</i> and keep all object initialisation static, improving the runtime
+    complexity for locating orders and to provide a more optimal way of sorting
+    ask/bid limits. All of the above was written in C during this attempt, which
+    mean't that many of the required data-structures needed to be built from
+    scratch. To achieve this, orders and limits are now initialised in pre-defined
+    arenas (arrays) which are fixed in size. Limits are keyed into the arena using
+    their price-point as the key—this comes with the disadvantage of being less
+    flexible in times of excessive price-volatility as the price-point range is
+    now fixed rather than dynamic—and allows limits and orders to be accessed
+    (sequentially if we're lucky) in <span class="math">O(1)</span> time respectively. Limits are stored
+    in priority-queues<a id="ref-3" href="#3"><sup>[3]</sup></a> using their price-points only, which means that we maintain a
+    sorted order of active bid and ask limits in <span class="math">O(logm)</span> time. This also allows
+    us to retain our top-of-book access times at <span class="math">O(1)</span> too!
+    </p>
+    <img style="width:100%;" src="data:image/webp;base64,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" alt="" />
 
-        <p>
-        <i>Free</i> orders are stored in a stack (<code>free_orders</code>) using the order's array
-        index as the key. This allows efficient re-use of recently "freed" orders,
-        where more recently used orders appear toward the top of the stack. What's nice
-        about this approach is that more recently used orders have a higher likelihood
-        of remaining within the (hot) cache and should therefore allow for more
-        efficient access times because they have not yet been ejected from the cache yet (leveraging
-        spatial and temporal locality). Similar to the limit arena, we are limited to
-        the number of orders we can support for a given ticker-symbol, but this can be
-        resized on a per-symbol-basis based on expected volume. Finally, all structs
-        have been packed to reduce memory slop<a id="ref-4" href="#4"><sup>[4]</sup></a>
-        <a id="ref-5" href="#5"><sup>[5]</sup></a>.
-        </p>
+    <p>
+    <i>Free</i> orders are stored in a stack (<code>free_orders</code>) using the order's array
+    index as the key. This allows efficient re-use of recently "freed" orders,
+    where more recently used orders appear toward the top of the stack. What's nice
+    about this approach is that more recently used orders have a higher likelihood
+    of remaining within the (hot) cache and should therefore allow for more
+    efficient access times because they have not yet been ejected from the cache yet (leveraging
+    spatial and temporal locality). Similar to the limit arena, we are limited to
+    the number of orders we can support for a given ticker-symbol, but this can be
+    resized on a per-symbol-basis based on expected volume. Finally, all structs
+    have been packed to reduce memory slop<a id="ref-4" href="#4"><sup>[4]</sup></a>
+    <a id="ref-5" href="#5"><sup>[5]</sup></a>.
+    </p>
 
-        <h3 class="writing-header">Looking ahead</h2>
-        <p>
-        Ultimately, the final result came out quite well for a short weekend project
-        and served as a nice intro into arena allocation, structure-packing and
-        priority queues. If I were to expand upon this project further, I would
-        like to make a simple event system where executed trades are written to
-        lockfree buffer and later handled by another thread accordingly, but
-        that can be a task for another day.
-        The order-book code can be found on
-        <a href="https://github.com/JakeBamrah/weekend-orderbook">github</a> for
-        anyone interested and feel free to reach out if you see any mistakes or
-        improvements.
-        </p>
+    <h3 class="writing-header">Looking ahead</h2>
+    <p>
+    Ultimately, the final result came out quite well for a short weekend project
+    and served as a nice intro into arena allocation, structure-packing and
+    priority queues. If I were to expand upon this project further, I would
+    like to make a simple event system where executed trades are written to
+    lockfree buffer and later handled by another thread accordingly, but
+    that can be a task for another day.
+    The order-book code can be found on
+    <a href="https://github.com/JakeBamrah/weekend-orderbook">github</a> for
+    anyone interested and feel free to reach out if you see any mistakes or
+    improvements.
+    </p>
 
-        <p class="ref-url">
-            <a href="#ref-1">
-                [1]
-            </a>
-            <a id="1" href="https://github.com/JakeBamrah/simple-orderbook">
-                Simple order-book
-            </a>
-        <p class="ref-url">
-            <a href="#ref-2">
-                [2]
-            </a>
-            <a id="2" href="https://web.archive.org/web/20110219163448/http://howtohft.wordpress.com/2011/02/15/how-to-build-a-fast-limit-order-book/">
-                How to build a fast limit order-book
-            </a>
-        </p>
-        <p class="ref-url">
-            <a href="#ref-3">
-                [3]
-            </a>
-            <a id="3" href="https://pages.cs.wisc.edu/~vernon/cs367/notes/11.PRIORITY-Q.html">
-                Priority queues
-            </a>
-        </p>
-        <p class="ref-url">
-            <a href="#ref-4">
-                [4]
-            </a>
-            <a id="4" href="https://akkadia.org/drepper/cpumemory.pdf">
-                What every programmer should know about memory
-            </a>
-        </p>
-        <p class="ref-url">
-            <a href="#ref-5">
-                [5]
-            </a>
-            <a id="5" href="http://www.catb.org/esr/structure-packing/">
-                The lost art of structure packing
-            </a>
-        </p>
-    {% endblock %}
+    <p class="ref-url">
+        <a href="#ref-1">
+            [1]
+        </a>
+        <a id="1" href="https://github.com/JakeBamrah/simple-orderbook">
+            Simple order-book
+        </a>
+    <p class="ref-url">
+        <a href="#ref-2">
+            [2]
+        </a>
+        <a id="2" href="https://web.archive.org/web/20110219163448/http://howtohft.wordpress.com/2011/02/15/how-to-build-a-fast-limit-order-book/">
+            How to build a fast limit order-book
+        </a>
+    </p>
+    <p class="ref-url">
+        <a href="#ref-3">
+            [3]
+        </a>
+        <a id="3" href="https://pages.cs.wisc.edu/~vernon/cs367/notes/11.PRIORITY-Q.html">
+            Priority queues
+        </a>
+    </p>
+    <p class="ref-url">
+        <a href="#ref-4">
+            [4]
+        </a>
+        <a id="4" href="https://akkadia.org/drepper/cpumemory.pdf">
+            What every programmer should know about memory
+        </a>
+    </p>
+    <p class="ref-url">
+        <a href="#ref-5">
+            [5]
+        </a>
+        <a id="5" href="http://www.catb.org/esr/structure-packing/">
+            The lost art of structure packing
+        </a>
+    </p>
 {% endblock %}

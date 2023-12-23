@@ -1,748 +1,750 @@
-{% extends "../base.html" %}
-    {% block body %}
-        <h2 class="writing-header">Figuring out threadpools</h2>
-        <p>
-        I have found myself crossing-paths with threadpools quite a lot
-        over the last few weeks. For my first encounter, I found myself pouring
-        over the
-        <a href="https://fastapi.tiangolo.com/async/#path-operation-functions">
-            fast-api
-        </a>
-        docs in an attempt to better understand how it dispatches functions to
-        it's external threadpool (outside the main event-loop). Not long
-        afterwards (during my orderbook
-        rewrite<a id="ref-1" href="#1"><sup>[1]</sup></a>),
-        I began to think about matching-engines again, specifically,
-        high-throughput message handling once an order has been executed
-        (@ 100k's messages p/s). As a matching-engine operates on orders
-        sequentially—where resource allocation is focused on processing incoming
-        orders as fast as possible—post-trade execution requires a pragmatic
-        approach to handling those trade messages reliably outside of the core
-        matching-engine logic (at least that's how I've always interpreted it).
-        This is where threadpools began to show their relevance once more
-        (frequency illusion at it's finest). What this post entails is a brief
-        overview of threadpools, how I went about implementing one and some of
-        the interesting things I learned along the way 🕳️🐇.
-        </p>
-
-        <h3 class="writing-header">What are threadpools and why use them?</h3>
-        <p>
-        Using multiple threads (of execution) allows for multiple tasks to be
-        scheduled within a single process in such a way that they can be
-        handled concurrently. What this means is that rather than waiting for a
-        single function to execute sequentially before moving to the next,
-        a process can try to optimize it's pipeline by scheduling tasks
-        in such a way as to minimize idle time between instructions (e.g.
-        executing instructions in another function while waiting for an
-        asynchronous call to complete). An important cavaet here is that
-        instantiating a thread is an expensive endeavour. A thread runtime
-        requires it's own stack along with copying over any relevant state from
-        the parent thread before beginning execution, all of which requires
-        kernel involvement for scheduler and memory allocation.
-        </p>
-
-        <div class="threadpool-figure">
-            <div class="threadpool-container">
-                <div class="threadpool-taskqueue">
-                    <div id="thread-t5" class="thread-ball"><span class="task">T5</span></div>
-                    <div id="thread-t4" class="thread-ball"><span class="task">T4</span></div>
-                </div>
-                <svg viewBox="0 -60 140 140" class="thread-arrow-produce">
-                    <defs>
-                    <marker id='head' orient="auto"
-                        markerWidth='3' markerHeight='4'
-                        refX='0.1' refY='2'>
-                        <path d='M0,0 V4 L2,2 Z'/>
-                    </marker>
-                    </defs>
-
-                    <path
-                    id='arrow-line'
-                    marker-end='url(#head)'
-                    stroke-width='2'
-                    fill='none'
-                    d='M0, 10, 120 -100, 0'
-                    />
-                    <path
-                    id='arrow-line'
-                    marker-end='url(#head)'
-                    stroke-width='2'
-                    fill='none'
-                    d='M0, 10, 120 10, 0'
-                    />
-                    <path
-                    id='arrow-line'
-                    marker-end='url(#head)'
-                    stroke-width='2'
-                    fill='none'
-                    d='M0, 10, 120 120, 0'
-                    />
-                </svg>
-                <div class="threadpool">
-                    <div class="thread-col">
-                    <div class="thread-ball" style="margin-top:5px;margin-left:10px;"><span class="task">T1</span></div>
-                    <svg class="thread" version="1.1" viewBox="0 0 95 95" xml:space="preserve" xmlns="http://www.w3.org/2000/svg"><path d="m19.045 16.978c7.6152-6.4648 17.438-9.8955 27.059-9.6831l0.043945 1.3022 3.6152-4.2749-3.9082-4.3218 0.043945 1.3018c-11.022 0.83301-21.466 5.8076-28.898 13.484-7.4951 7.6274-11.964 17.873-12.502 28.194 1.54-10.231 6.8975-19.599 14.547-26.002z"/><path d="m75.955 78.021c-7.6152 6.4658-17.438 9.8965-27.059 9.6836l-0.043945-1.3018-3.6152 4.2744 3.9082 4.3223-0.043945-1.3018c11.022-0.83301 21.467-5.8076 28.898-13.484 7.4961-7.6279 11.964-17.872 12.503-28.194-1.54 10.23-6.8984 19.6-14.548 26.002z"/><path d="m16.978 75.955c-6.4648-7.6152-9.8955-17.438-9.6826-27.059l1.3018-0.044922-4.2754-3.6147-4.3213 3.9087 1.3018-0.043945c0.83301 11.021 5.8076 21.467 13.483 28.898 7.6279 7.4951 17.873 11.964 28.195 12.502-10.231-1.5391-19.6-6.8975-26.003-14.547z"/><path d="m93.698 45.898c-0.83301-11.022-5.8076-21.466-13.484-28.898-7.627-7.4961-17.873-11.964-28.194-12.503 10.231 1.54 19.599 6.8984 26.002 14.548 6.4658 7.6152 9.8955 17.438 9.6836 27.058l-1.3018 0.044434 4.2754 3.6157 4.3213-3.9092-1.3018 0.044434z"/></svg>
-                    <svg class="thread" version="1.1" viewBox="0 0 95 95" xml:space="preserve" xmlns="http://www.w3.org/2000/svg"><path d="m19.045 16.978c7.6152-6.4648 17.438-9.8955 27.059-9.6831l0.043945 1.3022 3.6152-4.2749-3.9082-4.3218 0.043945 1.3018c-11.022 0.83301-21.466 5.8076-28.898 13.484-7.4951 7.6274-11.964 17.873-12.502 28.194 1.54-10.231 6.8975-19.599 14.547-26.002z"/><path d="m75.955 78.021c-7.6152 6.4658-17.438 9.8965-27.059 9.6836l-0.043945-1.3018-3.6152 4.2744 3.9082 4.3223-0.043945-1.3018c11.022-0.83301 21.467-5.8076 28.898-13.484 7.4961-7.6279 11.964-17.872 12.503-28.194-1.54 10.23-6.8984 19.6-14.548 26.002z"/><path d="m16.978 75.955c-6.4648-7.6152-9.8955-17.438-9.6826-27.059l1.3018-0.044922-4.2754-3.6147-4.3213 3.9087 1.3018-0.043945c0.83301 11.021 5.8076 21.467 13.483 28.898 7.6279 7.4951 17.873 11.964 28.195 12.502-10.231-1.5391-19.6-6.8975-26.003-14.547z"/><path d="m93.698 45.898c-0.83301-11.022-5.8076-21.466-13.484-28.898-7.627-7.4961-17.873-11.964-28.194-12.503 10.231 1.54 19.599 6.8984 26.002 14.548 6.4658 7.6152 9.8955 17.438 9.6836 27.058l-1.3018 0.044434 4.2754 3.6157 4.3213-3.9092-1.3018 0.044434z"/></svg>
-                    <svg class="thread" version="1.1" viewBox="0 0 95 95" xml:space="preserve" xmlns="http://www.w3.org/2000/svg"><path d="m19.045 16.978c7.6152-6.4648 17.438-9.8955 27.059-9.6831l0.043945 1.3022 3.6152-4.2749-3.9082-4.3218 0.043945 1.3018c-11.022 0.83301-21.466 5.8076-28.898 13.484-7.4951 7.6274-11.964 17.873-12.502 28.194 1.54-10.231 6.8975-19.599 14.547-26.002z"/><path d="m75.955 78.021c-7.6152 6.4658-17.438 9.8965-27.059 9.6836l-0.043945-1.3018-3.6152 4.2744 3.9082 4.3223-0.043945-1.3018c11.022-0.83301 21.467-5.8076 28.898-13.484 7.4961-7.6279 11.964-17.872 12.503-28.194-1.54 10.23-6.8984 19.6-14.548 26.002z"/><path d="m16.978 75.955c-6.4648-7.6152-9.8955-17.438-9.6826-27.059l1.3018-0.044922-4.2754-3.6147-4.3213 3.9087 1.3018-0.043945c0.83301 11.021 5.8076 21.467 13.483 28.898 7.6279 7.4951 17.873 11.964 28.195 12.502-10.231-1.5391-19.6-6.8975-26.003-14.547z"/><path d="m93.698 45.898c-0.83301-11.022-5.8076-21.466-13.484-28.898-7.627-7.4961-17.873-11.964-28.194-12.503 10.231 1.54 19.599 6.8984 26.002 14.548 6.4658 7.6152 9.8955 17.438 9.6836 27.058l-1.3018 0.044434 4.2754 3.6157 4.3213-3.9092-1.3018 0.044434z"/></svg>
-                    <div id="thread-t3" class="thread-ball"><span class="task">T3</span></div>
-                    </div>
-                    <div class="thread-col">
-                    <svg class="thread" version="1.1" viewBox="0 0 95 95" xml:space="preserve" xmlns="http://www.w3.org/2000/svg"><path d="m19.045 16.978c7.6152-6.4648 17.438-9.8955 27.059-9.6831l0.043945 1.3022 3.6152-4.2749-3.9082-4.3218 0.043945 1.3018c-11.022 0.83301-21.466 5.8076-28.898 13.484-7.4951 7.6274-11.964 17.873-12.502 28.194 1.54-10.231 6.8975-19.599 14.547-26.002z"/><path d="m75.955 78.021c-7.6152 6.4658-17.438 9.8965-27.059 9.6836l-0.043945-1.3018-3.6152 4.2744 3.9082 4.3223-0.043945-1.3018c11.022-0.83301 21.467-5.8076 28.898-13.484 7.4961-7.6279 11.964-17.872 12.503-28.194-1.54 10.23-6.8984 19.6-14.548 26.002z"/><path d="m16.978 75.955c-6.4648-7.6152-9.8955-17.438-9.6826-27.059l1.3018-0.044922-4.2754-3.6147-4.3213 3.9087 1.3018-0.043945c0.83301 11.021 5.8076 21.467 13.483 28.898 7.6279 7.4951 17.873 11.964 28.195 12.502-10.231-1.5391-19.6-6.8975-26.003-14.547z"/><path d="m93.698 45.898c-0.83301-11.022-5.8076-21.466-13.484-28.898-7.627-7.4961-17.873-11.964-28.194-12.503 10.231 1.54 19.599 6.8984 26.002 14.548 6.4658 7.6152 9.8955 17.438 9.6836 27.058l-1.3018 0.044434 4.2754 3.6157 4.3213-3.9092-1.3018 0.044434z"/></svg>
-                    <svg class="thread" version="1.1" viewBox="0 0 95 95" xml:space="preserve" xmlns="http://www.w3.org/2000/svg"><path d="m19.045 16.978c7.6152-6.4648 17.438-9.8955 27.059-9.6831l0.043945 1.3022 3.6152-4.2749-3.9082-4.3218 0.043945 1.3018c-11.022 0.83301-21.466 5.8076-28.898 13.484-7.4951 7.6274-11.964 17.873-12.502 28.194 1.54-10.231 6.8975-19.599 14.547-26.002z"/><path d="m75.955 78.021c-7.6152 6.4658-17.438 9.8965-27.059 9.6836l-0.043945-1.3018-3.6152 4.2744 3.9082 4.3223-0.043945-1.3018c11.022-0.83301 21.467-5.8076 28.898-13.484 7.4961-7.6279 11.964-17.872 12.503-28.194-1.54 10.23-6.8984 19.6-14.548 26.002z"/><path d="m16.978 75.955c-6.4648-7.6152-9.8955-17.438-9.6826-27.059l1.3018-0.044922-4.2754-3.6147-4.3213 3.9087 1.3018-0.043945c0.83301 11.021 5.8076 21.467 13.483 28.898 7.6279 7.4951 17.873 11.964 28.195 12.502-10.231-1.5391-19.6-6.8975-26.003-14.547z"/><path d="m93.698 45.898c-0.83301-11.022-5.8076-21.466-13.484-28.898-7.627-7.4961-17.873-11.964-28.194-12.503 10.231 1.54 19.599 6.8984 26.002 14.548 6.4658 7.6152 9.8955 17.438 9.6836 27.058l-1.3018 0.044434 4.2754 3.6157 4.3213-3.9092-1.3018 0.044434z"/></svg>
-                    <svg class="thread" version="1.1" viewBox="0 0 95 95" xml:space="preserve" xmlns="http://www.w3.org/2000/svg"><path d="m19.045 16.978c7.6152-6.4648 17.438-9.8955 27.059-9.6831l0.043945 1.3022 3.6152-4.2749-3.9082-4.3218 0.043945 1.3018c-11.022 0.83301-21.466 5.8076-28.898 13.484-7.4951 7.6274-11.964 17.873-12.502 28.194 1.54-10.231 6.8975-19.599 14.547-26.002z"/><path d="m75.955 78.021c-7.6152 6.4658-17.438 9.8965-27.059 9.6836l-0.043945-1.3018-3.6152 4.2744 3.9082 4.3223-0.043945-1.3018c11.022-0.83301 21.467-5.8076 28.898-13.484 7.4961-7.6279 11.964-17.872 12.503-28.194-1.54 10.23-6.8984 19.6-14.548 26.002z"/><path d="m16.978 75.955c-6.4648-7.6152-9.8955-17.438-9.6826-27.059l1.3018-0.044922-4.2754-3.6147-4.3213 3.9087 1.3018-0.043945c0.83301 11.021 5.8076 21.467 13.483 28.898 7.6279 7.4951 17.873 11.964 28.195 12.502-10.231-1.5391-19.6-6.8975-26.003-14.547z"/><path d="m93.698 45.898c-0.83301-11.022-5.8076-21.466-13.484-28.898-7.627-7.4961-17.873-11.964-28.194-12.503 10.231 1.54 19.599 6.8984 26.002 14.548 6.4658 7.6152 9.8955 17.438 9.6836 27.058l-1.3018 0.044434 4.2754 3.6157 4.3213-3.9092-1.3018 0.044434z"/></svg>
-                    <div id="thread-t2" class="thread-ball"><span class="task">T2</span></div>
-                    </div>
-                </div>
-            </div>
-            <p style="font-size:14px; text-align:center;">
-            Threadpool overview: Each task (<span style="padding-right:1px;" class="math">T</span>) is enqueued before being executed by a thread</br>
-            <i>(note the fixed number of threads in the pool)</i>
-            </p>
-        </div>
-
-        <p>
-        This is where threadpools come into play. Threadpools can offer an
-        efficient implementation of the traditional multi-threaded model by
-        providing a (fixed) series of long-running threads of execution (pool),
-        rather than going through unnecessary and repeated creation and teardown
-        of threads as work arises. Limiting the number of threads being created
-        can also help mitigate potential resource contention, consumption and
-        excessive context-switching. The important thing to note when using
-        threadpools is that they are rather inelastic, by that I mean, we
-        want to have a relatively good idea of our average workload before
-        deciding to use a threadpool. Afterall, this inelasticity is what can
-        make a threadpool more efficient than spawning threads on demand.
-        </p>
-
-        <h3 class="writing-header">Threadpool considerations</h3>
-        <p>
-        I'll try not to get into the details of threadpool implementations too
-        much as I believe the design considerations offer a better insight into
-        how they operate. The program was written in C and turned out to be much
-        more compact and simple than I anticipated (which I'm super happy about).
-        For those curious about the technical details, I'll provide a link to
-        the source code of <i>thool</i>
-        below<a id="ref-2" href="#2"><sup>[2]</sup></a>.
-        For now, here are some of the considerations and common patterns that I
-        found interesting while writing thool.
-        </p>
-
-        <p>
-        <ul>
-        <li>
-        <b>Taskqueue:</b> Acts as a container for incoming tasks
-        which reside there until being pulled by an idle worker. Each
-        <code>task</code> object comprises of a function and an argument
-        property.
-        A worker will pull a task from the queue and execute the function using
-        the given arguments (if any were given). There appeared to be two common
-        approaches to implementing a taskqueue, by using a linked-list or a
-        circular buffer. Using a linked-list offers more flexibility through an
-        unbounded-queue, i.e., it can grow indefinitely, opening up the
-        possibility to adopting a truly lock-free, unbounded queueing
-        mechanism. However, with these benefits comes the cost of frequent
-        <code>malloc</code> and <code>free</code> usage, an expensive set of
-        calls that I would like to avoid. The circular-buffer on the other-hand,
-        is the antithesis of the linked-list. While it is bounded to how many
-        tasks it can accomadate, we can drastically minimize the number of
-        allocations required. Along with the circular buffer, mutexes become a
-        good default option, as I find them easier to reason about and there is
-        potential to be blocked by the queue size anyways.
-        </li>
-        <div class="taskqueue-container">
-            <div class="lock-container left-lock">
-                <div class="enqueue"></div>
-                <p class="enqueue-p">
-                    Mutex
-                </p>
-            </div>
-            <div id="ball1" class="ball"><span class="task">T1</span></div>
-            <div id="ball2" class="ball"><span class="task">T2</span></div>
-            <div id="ball3" class="ball"><span class="task">T3</span></div>
-            <div class="lock-container right-lock">
-                <div class="dequeue"></div>
-                <p class="dequeue-p">
-                    Mutex
-                </p>
-            </div>
-            <div id="dequeue-info-message" class="info-message">
-                Producer acquires mutex and enqueues tasks
-            </div>
-            <div id="enqueue-info-message" class="info-message">
-                Consumer acquires mutex and pulls tasks
-            </div>
-        </div>
-        <li>
-        <b>Fixed vs. dynamic threads:</b> While I've spoke about the
-        inelasticity of threadpools earlier, this is still worth quickly
-        exploring. Aside from the expense of creating / destroying threads,
-        having a dynamic threadpool doesn't make sense entirely, because the
-        benefits of a threadpool are to avoid such expensive operations. For
-        this reason, you will likely see a fixed number of threads being created
-        on threadpool creation.
-        </li>
-        <li>
-        <b>Conditional variables:</b> Provide a wonderful mechanism for
-        communicating a binary state between a group of threads using a mutex.
-        Threads can
-        be made to <code>wait</code> when a given scenario is met (e.g. no
-        tasks to process) and be notified or <code>signal</code>led once that
-        state of the system changes. This allows us to avoid the cost of
-        constantly spinning threads like you would see in a spin-lock for
-        example and helps to save CPU cycles. In thool, you will find a
-        single cond-var used to signal a thread to wait while the
-        <code>taskqueue</code> is empty and to awaken when there are tasks
-        pending. I believe a binary-sempahore could also be used similarily
-        here but it's not something I am familiar with and it didn't feel
-        entirely appropriate compared to using conditional variables.
-        </li>
-        <li>
-        <b>Locking mechanisms:</b> There were two sections of the threadpool
-        that needed to be synchronised across threads: <code>thread_count</code>,
-        was responsible for managing the number of alive and active threads in
-        the threadpool and <code>taskqueue_lock</code>, which governed which
-        thread had control over the taskqueues read-write privilege.
-        Fortunately, synchronisation is mutually exclusive which means a small
-        number of mutexes can be used to govern threadpool state effectively.
-        <div class="threadpool-figure">
-            <div class="threadpool-count-container">
-                <div class="threadpool-count">
-                    <div class="thread-ball" style="margin-top:5px;margin-left:5px;"><span class="task">T1</span></div>
-                    <svg class="thread" version="1.1" viewBox="0 0 95 95" xml:space="preserve" xmlns="http://www.w3.org/2000/svg"><path d="m19.045 16.978c7.6152-6.4648 17.438-9.8955 27.059-9.6831l0.043945 1.3022 3.6152-4.2749-3.9082-4.3218 0.043945 1.3018c-11.022 0.83301-21.466 5.8076-28.898 13.484-7.4951 7.6274-11.964 17.873-12.502 28.194 1.54-10.231 6.8975-19.599 14.547-26.002z"/><path d="m75.955 78.021c-7.6152 6.4658-17.438 9.8965-27.059 9.6836l-0.043945-1.3018-3.6152 4.2744 3.9082 4.3223-0.043945-1.3018c11.022-0.83301 21.467-5.8076 28.898-13.484 7.4961-7.6279 11.964-17.872 12.503-28.194-1.54 10.23-6.8984 19.6-14.548 26.002z"/><path d="m16.978 75.955c-6.4648-7.6152-9.8955-17.438-9.6826-27.059l1.3018-0.044922-4.2754-3.6147-4.3213 3.9087 1.3018-0.043945c0.83301 11.021 5.8076 21.467 13.483 28.898 7.6279 7.4951 17.873 11.964 28.195 12.502-10.231-1.5391-19.6-6.8975-26.003-14.547z"/><path d="m93.698 45.898c-0.83301-11.022-5.8076-21.466-13.484-28.898-7.627-7.4961-17.873-11.964-28.194-12.503 10.231 1.54 19.599 6.8984 26.002 14.548 6.4658 7.6152 9.8955 17.438 9.6836 27.058l-1.3018 0.044434 4.2754 3.6157 4.3213-3.9092-1.3018 0.044434z"/></svg>
-                    <svg class="thread" version="1.1" viewBox="0 0 95 95" xml:space="preserve" xmlns="http://www.w3.org/2000/svg"><path d="m19.045 16.978c7.6152-6.4648 17.438-9.8955 27.059-9.6831l0.043945 1.3022 3.6152-4.2749-3.9082-4.3218 0.043945 1.3018c-11.022 0.83301-21.466 5.8076-28.898 13.484-7.4951 7.6274-11.964 17.873-12.502 28.194 1.54-10.231 6.8975-19.599 14.547-26.002z"/><path d="m75.955 78.021c-7.6152 6.4658-17.438 9.8965-27.059 9.6836l-0.043945-1.3018-3.6152 4.2744 3.9082 4.3223-0.043945-1.3018c11.022-0.83301 21.467-5.8076 28.898-13.484 7.4961-7.6279 11.964-17.872 12.503-28.194-1.54 10.23-6.8984 19.6-14.548 26.002z"/><path d="m16.978 75.955c-6.4648-7.6152-9.8955-17.438-9.6826-27.059l1.3018-0.044922-4.2754-3.6147-4.3213 3.9087 1.3018-0.043945c0.83301 11.021 5.8076 21.467 13.483 28.898 7.6279 7.4951 17.873 11.964 28.195 12.502-10.231-1.5391-19.6-6.8975-26.003-14.547z"/><path d="m93.698 45.898c-0.83301-11.022-5.8076-21.466-13.484-28.898-7.627-7.4961-17.873-11.964-28.194-12.503 10.231 1.54 19.599 6.8984 26.002 14.548 6.4658 7.6152 9.8955 17.438 9.6836 27.058l-1.3018 0.044434 4.2754 3.6157 4.3213-3.9092-1.3018 0.044434z"/></svg>
-                    <svg class="thread" version="1.1" viewBox="0 0 95 95" xml:space="preserve" xmlns="http://www.w3.org/2000/svg"><path d="m19.045 16.978c7.6152-6.4648 17.438-9.8955 27.059-9.6831l0.043945 1.3022 3.6152-4.2749-3.9082-4.3218 0.043945 1.3018c-11.022 0.83301-21.466 5.8076-28.898 13.484-7.4951 7.6274-11.964 17.873-12.502 28.194 1.54-10.231 6.8975-19.599 14.547-26.002z"/><path d="m75.955 78.021c-7.6152 6.4658-17.438 9.8965-27.059 9.6836l-0.043945-1.3018-3.6152 4.2744 3.9082 4.3223-0.043945-1.3018c11.022-0.83301 21.467-5.8076 28.898-13.484 7.4961-7.6279 11.964-17.872 12.503-28.194-1.54 10.23-6.8984 19.6-14.548 26.002z"/><path d="m16.978 75.955c-6.4648-7.6152-9.8955-17.438-9.6826-27.059l1.3018-0.044922-4.2754-3.6147-4.3213 3.9087 1.3018-0.043945c0.83301 11.021 5.8076 21.467 13.483 28.898 7.6279 7.4951 17.873 11.964 28.195 12.502-10.231-1.5391-19.6-6.8975-26.003-14.547z"/><path d="m93.698 45.898c-0.83301-11.022-5.8076-21.466-13.484-28.898-7.627-7.4961-17.873-11.964-28.194-12.503 10.231 1.54 19.599 6.8984 26.002 14.548 6.4658 7.6152 9.8955 17.438 9.6836 27.058l-1.3018 0.044434 4.2754 3.6157 4.3213-3.9092-1.3018 0.044434z"/></svg>
-                    <div id="thread-count-t2" class="thread-ball"><span class="task">T2</span></div>
-                </div>
-                <div class="thread-count-message">
-                    <p id="thread-count-message1">
-                        Alive threads:3&emsp;Working threads:2
-                    </p>
-                    <p id="thread-count-message2">
-                        Alive threads:3&emsp;Working threads:1
-                    </p>
-                </div>
-            </div>
-        </div>
-        </li>
-        <li>
-        <b>Threadpool shutdowns:</b> Finally, it is worth considering how a
-        threadpool should behave on shutdown. I found this quite difficult to
-        implement and I went with a graceful approach overall, even if an
-        immediate shutdown is instructed. This was done to avoid ending-up in a
-        state where data permanent corruption of a system could occur. A great
-        example given by nachtimwald<a id="ref-3" href="#3"><sup>[3]</sup></a>
-        would be terminating a thread in the middle of a database transaction
-        which may leave us in a corrupted state. The behaviour of thool ended
-        up as follows, if an immediate shutdown is requested, threads are given
-        a chance to finish their <i>current</i> task. For a graceful shutdown,
-        no more tasks can be added to the queue and threads can attempt to empty
-        the taskqueue entirely. I'm not entirely sure if this is the best
-        approach, but I'm content with how it behaves for now.
-        </li>
-        </ul>
-        These were some of the main considerations when putting thool together.
-        What I found nice about discovering the above is that it distilled
-        the fundamental concepts of a threadpool quite succinctly and gave me
-        enough guidance to go out and implement a very simple version of one!
-        </p>
-        <h3 class="writing-header">Further thoughts</h3>
-        <p>
-        While I'm happy with the finished product, I think there are some
-        interesting areas that I would like to explore with thool. I would
-        like to consider adding in a <code>force_add</code> option when
-        queueing tasks onto the threadpool. While this would require a
-        <code>malloc</code> it would hopefully be logarithmic. Finally,
-        I think it would be nice to expand the thool library such that it
-        could be used on Windows machines. This would require writing  some kind
-        of wrapper around the <code>pthread</code> module as that is not
-        available on Windows runtimes. Anyways, I hope someone found this
-        useful in some way, I really enjoyed the process 🤙.
-        </p>
-
-        <p class="ref-url">
-            <a href="#ref-1">
-                [1]
-            </a>
-            <a id="1" href="/writing/12-Nov-2023.html">
-                Orderbook rewrite
-            </a>
-        </p>
-        <p class="ref-url">
-            <a href="#ref-2">
-                [2]
-            </a>
-            <a id="2" href="https://github.com/JakeBamrah/thool">
-                Thool: A lightweight threadpool library
-            </a>
-        </p>
-        <p class="ref-url">
-            <a href="#ref-3">
-                [3]
-            </a>
-            <a id="3" href="https://nachtimwald.com/">
-                John's blog
-            </a>
-        </p>
-<style>
-.threadpool-figure {
-    padding: 2px 0px;
-}
-
-.threadpool-container {
-    height: 300px;
-    position: relative;
-    width: 100%;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-}
-
-.threadpool {
-    border:1px solid #555;
-    padding: 28px;
-    width:120px;
-    height:200px;
-    border-radius: 1rem;
-    display:flex;
-}
-
-.thread-arrow-produce {
-    width:80px;
-    height:100%;
-    margin-right: 12px;
-    fill: #555;
-    stroke: #555;
-}
-
-.thread {
-  fill: #e4e4e4;
-  -webkit-animation: threadpool-spin 4s infinite linear;
-}
-
-.thread-col {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
-}
-
-.threadpool-taskqueue {
-    height: 42px;
-    width: 350px;
-    display: flex;
-    justify-content: space-between;
-    position: absolute;
-}
-
-.thread-ball {
-  width: 40px;
-  height: 40px;
-  background: #ddeaef;
-  border-radius: 50%;
-  position: absolute;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0.8;
-}
-
-@media (prefers-color-scheme: dark) {
-    .thread {
-        fill: #ddeaef;
+{{ extends ../../base.html }}
+{% insert head %}
+    <style>
+    .threadpool-figure {
+        padding: 2px 0px;
     }
-    .thread-arrow-produce {
-        fill:#ddd;
-        stroke: #ddd;
+
+    .threadpool-container {
+        height: 300px;
+        position: relative;
+        width: 100%;
+        display:flex;
+        align-items:center;
+        justify-content:center;
     }
+
     .threadpool {
-        border-color: #ddd;
+        border:1px solid #555;
+        padding: 28px;
+        width:120px;
+        height:200px;
+        border-radius: 1rem;
+        display:flex;
     }
-    .task {
-        color:#222;
-    }
-}
 
-#thread-t2 {
-  margin-top:155px;
-  margin-left:10px;
-  -webkit-animation: threadpool-t2 6s infinite;
-}
-
-#thread-t3 {
-  margin-left:10px;
-  margin-top:155px;
-}
-
-#thread-t4 {
-  left: 0%;
-  -webkit-animation: threadpool-t3 6s infinite;
-}
-
-#thread-t5 {
-    left: 20%;
-    -webkit-animation: threadpool-t4 6s infinite;
-}
-
-@-webkit-keyframes threadpool-t2
-{
-    0%  {
-        margin-left:10px; opacity: 0.8;
+    .thread-arrow-produce {
+        width:80px;
+        height:100%;
+        margin-right: 12px;
+        fill: #555;
+        stroke: #555;
     }
-    33%  {
-        margin-left:10px; opacity: 0.8;
-    }
-    75% {
-        margin-left:156px; opacity:0;
-    }
-    100% {
-        margin-left:156px; opacity:0;
-    }
-}
 
-@-webkit-keyframes threadpool-t3
-{
-    0%  {
-        left:0%;
+    .thread {
+    fill: #e4e4e4;
+    -webkit-animation: threadpool-spin 4s infinite linear;
     }
-    75% {
-        left:66%; margin-top:1px;
-    }
-    100% {
-        left:66%; margin-top:1px;
-    }
-}
 
-@-webkit-keyframes threadpool-t4
-{
-    0%  {
-        left:0%; opacity:0;
+    .thread-col {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
     }
-    10% {
-        left:0%; opacity:0;
+
+    .threadpool-taskqueue {
+        height: 42px;
+        width: 350px;
+        display: flex;
+        justify-content: space-between;
+        position: absolute;
     }
-    50% {
-        left:0%; opacity:0.8;
+
+    .thread-ball {
+    width: 40px;
+    height: 40px;
+    background: #ddeaef;
+    border-radius: 50%;
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.8;
     }
-    100% {
-        left:0%; opacity:0.8;
+
+    @media (prefers-color-scheme: dark) {
+        .thread {
+            fill: #ddeaef;
+        }
+        .thread-arrow-produce {
+            fill:#ddd;
+            stroke: #ddd;
+        }
+        .threadpool {
+            border-color: #ddd;
+        }
+        .task {
+            color:#222;
+        }
     }
-}
 
-@keyframes threadpool-spin {
-    100% {
-        transform:rotate(360deg);
+    #thread-t2 {
+        margin-top:155px;
+        margin-left:10px;
+        -webkit-animation: threadpool-t2 6s infinite;
     }
-}
 
-.taskqueue-container {
-    padding: 24px 0px;
-    margin: 12px 0px;
-    height: 155px;
-    position: relative;
-    width: 100%;
-}
+    #thread-t3 {
+        margin-left:10px;
+        margin-top:155px;
+    }
 
-.task {
-    color: #555;
-    font-style: italic;
-    font-family: Times New Roman;
-}
-
-.lock-container {
-    position:absolute;
-    flex-direction:column;
-    display:flex;
-    justify-content:center;
-    align-items:center;
-}
-
-.left-lock {
-    left: 20%;
-}
-.right-lock {
-    left: 75%;
-}
-
-@media (min-width:1px) {
-    .left-lock {
+    #thread-t4 {
         left: 0%;
+        -webkit-animation: threadpool-t3 6s infinite;
     }
-    .right-lock {
-        left: 68%;
-    }
-}
 
-@media (min-width:600px) {
+    #thread-t5 {
+        left: 20%;
+        -webkit-animation: threadpool-t4 6s infinite;
+    }
+
+    @-webkit-keyframes threadpool-t2
+    {
+        0%  {
+            margin-left:10px; opacity: 0.8;
+        }
+        33%  {
+            margin-left:10px; opacity: 0.8;
+        }
+        75% {
+            margin-left:156px; opacity:0;
+        }
+        100% {
+            margin-left:156px; opacity:0;
+        }
+    }
+
+    @-webkit-keyframes threadpool-t3
+    {
+        0%  {
+            left:0%;
+        }
+        75% {
+            left:66%; margin-top:1px;
+        }
+        100% {
+            left:66%; margin-top:1px;
+        }
+    }
+
+    @-webkit-keyframes threadpool-t4
+    {
+        0%  {
+            left:0%; opacity:0;
+        }
+        10% {
+            left:0%; opacity:0;
+        }
+        50% {
+            left:0%; opacity:0.8;
+        }
+        100% {
+            left:0%; opacity:0.8;
+        }
+    }
+
+    @keyframes threadpool-spin {
+        100% {
+            transform:rotate(360deg);
+        }
+    }
+
+    .taskqueue-container {
+        padding: 24px 0px;
+        margin: 12px 0px;
+        height: 155px;
+        position: relative;
+        width: 100%;
+    }
+
+    .task {
+        color: #555;
+        font-style: italic;
+        font-family: Times New Roman;
+    }
+
+    .lock-container {
+        position:absolute;
+        flex-direction:column;
+        display:flex;
+        justify-content:center;
+        align-items:center;
+    }
+
     .left-lock {
         left: 20%;
     }
     .right-lock {
         left: 75%;
     }
-}
 
-.enqueue {
-  height:80px;
-  background-color: #c7dde6;
-  width:6px;
-  border-radius: 4px;
-  -webkit-animation: enqueue-lock 8s infinite;
-}
+    @media (min-width:1px) {
+        .left-lock {
+            left: 0%;
+        }
+        .right-lock {
+            left: 68%;
+        }
+    }
 
-.dequeue {
-  height:80px;
-  background-color: #c7dde6;
-  width:6px;
-  border-radius: 4px;
-  -webkit-animation: dequeue-lock 8s infinite;
-}
+    @media (min-width:600px) {
+        .left-lock {
+            left: 20%;
+        }
+        .right-lock {
+            left: 75%;
+        }
+    }
 
-.dequeue-p {
-  width:80px;
-  font-size:14px;
-  text-align: center;
-  -webkit-animation: dequeue-lock 8s infinite;
-}
+    .enqueue {
+    height:80px;
+    background-color: #c7dde6;
+    width:6px;
+    border-radius: 4px;
+    -webkit-animation: enqueue-lock 8s infinite;
+    }
 
-.enqueue-p {
-  width:80px;
-  font-size: 14px;
-  text-align: center;
-  -webkit-animation: enqueue-lock 8s infinite;
-}
+    .dequeue {
+    height:80px;
+    background-color: #c7dde6;
+    width:6px;
+    border-radius: 4px;
+    -webkit-animation: dequeue-lock 8s infinite;
+    }
 
-.info-message {
-    height: 80%;
-    width: 100%;
-    position:absolute;
-  display: flex;
-  align-items: end;
-  justify-content: center;
-  font-size: 14px;
-}
+    .dequeue-p {
+    width:80px;
+    font-size:14px;
+    text-align: center;
+    -webkit-animation: dequeue-lock 8s infinite;
+    }
+
+    .enqueue-p {
+    width:80px;
+    font-size: 14px;
+    text-align: center;
+    -webkit-animation: enqueue-lock 8s infinite;
+    }
+
+    .info-message {
+        height: 80%;
+        width: 100%;
+        position:absolute;
+    display: flex;
+    align-items: end;
+    justify-content: center;
+    font-size: 14px;
+    }
 
 #dequeue-info-message {
-    -webkit-animation: display-dequeue-lock-info 8s infinite;
-}
+        -webkit-animation: display-dequeue-lock-info 8s infinite;
+    }
 
 #enqueue-info-message {
-    -webkit-animation: display-enqueue-lock-info 8s infinite;
-}
+        -webkit-animation: display-enqueue-lock-info 8s infinite;
+    }
 
-@keyframes display-dequeue-lock-info {
-    0% {opacity: 0; }
-    10% {opacity: 1; }
-    40% { opacity: 1; }
-    50% { opacity: 0; }
-    100% { opacity: 0; }
-}
+    @keyframes display-dequeue-lock-info {
+        0% {opacity: 0; }
+        10% {opacity: 1; }
+        40% { opacity: 1; }
+        50% { opacity: 0; }
+        100% { opacity: 0; }
+    }
 
-@keyframes display-enqueue-lock-info {
-    0% {opacity: 0; }
-    50% {opacity: 0; }
-    55% { opacity: 1; }
-    90% { opacity: 1; }
-    100% { opacity: 0; }
-}
+    @keyframes display-enqueue-lock-info {
+        0% {opacity: 0; }
+        50% {opacity: 0; }
+        55% { opacity: 1; }
+        90% { opacity: 1; }
+        100% { opacity: 0; }
+    }
 
-@keyframes display-lock-info {
-    0% {opacity: 0; }
-    25% {opacity: 1; }
-    50% { opacity: 1; }
-    75% { opacity: 0; }
-    100% { opacity: 0; }
-}
+    @keyframes display-lock-info {
+        0% {opacity: 0; }
+        25% {opacity: 1; }
+        50% { opacity: 1; }
+        75% { opacity: 0; }
+        100% { opacity: 0; }
+    }
 
-@keyframes enqueue-lock {
-    0% { opacity: 1; }
-    10% { opacity: 0; }
-    60% { opacity: 0; }
-    100% { opacity: 1; }
-}
+    @keyframes enqueue-lock {
+        0% { opacity: 1; }
+        10% { opacity: 0; }
+        60% { opacity: 0; }
+        100% { opacity: 1; }
+    }
 
-@keyframes dequeue-lock {
-    0% { opacity: 0; }
-    50% { opacity: 1; }
-    100% { opacity: 0; }
-}
+    @keyframes dequeue-lock {
+        0% { opacity: 0; }
+        50% { opacity: 1; }
+        100% { opacity: 0; }
+    }
 
 
-.ball {
-    width: 50px;
-    height: 50px;
-    background: #ddeaef;
-    border-radius: 50%;
-    position: absolute;
-    top:18%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
+    .ball {
+        width: 50px;
+        height: 50px;
+        background: #ddeaef;
+        border-radius: 50%;
+        position: absolute;
+        top:18%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
 
 #ball1 {
-    left:-100px;
-    -webkit-animation: move 8s infinite;
-    -webkit-animation-fill-mode: forwards;
-}
+        left:-100px;
+        -webkit-animation: move 8s infinite;
+        -webkit-animation-fill-mode: forwards;
+    }
 #ball2 {
-    -webkit-animation: move2 8s infinite;
-    -webkit-animation-fill-mode: forwards;
-    -webkit-animation-delay: 0.75s;
-}
+        -webkit-animation: move2 8s infinite;
+        -webkit-animation-fill-mode: forwards;
+        -webkit-animation-delay: 0.75s;
+    }
 #ball3 {
-    -webkit-animation: move3 8s infinite;
-    -webkit-animation-fill-mode: forwards;
-    -webkit-animation-delay: 1.5s;
-}
+        -webkit-animation: move3 8s infinite;
+        -webkit-animation-fill-mode: forwards;
+        -webkit-animation-delay: 1.5s;
+    }
 
-@-webkit-keyframes move
-{
-    0%  {
-        left: calc(20% - 25px); opacity: 0.0;
+    @-webkit-keyframes move
+    {
+        0%  {
+            left: calc(20% - 25px); opacity: 0.0;
+        }
+    37.5%  {
+            left: calc(60% - 25px); opacity: 0.8;
+        }
+        75% {
+            left: calc(60% - 25px); opacity: 0.8;
+        }
+        85% {
+            left: 80%; opacity: 0;
+        }
+        100% {
+            opacity: 0;
+        }
     }
-   37.5%  {
-        left: calc(60% - 25px); opacity: 0.8;
-    }
-    75% {
-        left: calc(60% - 25px); opacity: 0.8;
-    }
-    85% {
-        left: 80%; opacity: 0;
-    }
-    100% {
-        opacity: 0;
-    }
-}
 
-@-webkit-keyframes move2
-{
-    0%  {
-        left: calc(20% - 67px); opacity: 0.0;
+    @-webkit-keyframes move2
+    {
+        0%  {
+            left: calc(20% - 67px); opacity: 0.0;
+        }
+    37.5%  {
+            left: calc(60% - 67px); opacity: 0.8;
+        }
+        75% {
+            left: calc(60% - 67px); opacity: 0.8;
+        }
+        85% {
+            left: 80%; opacity: 0;
+        }
+        100% {
+            opacity: 0;
+        }
     }
-   37.5%  {
-        left: calc(60% - 67px); opacity: 0.8;
-    }
-    75% {
-        left: calc(60% - 67px); opacity: 0.8;
-    }
-    85% {
-        left: 80%; opacity: 0;
-    }
-    100% {
-        opacity: 0;
-    }
-}
 
-@-webkit-keyframes move3
-{
-    0%  {
-        left: calc(20% - 110px); opacity: 0.0;
+    @-webkit-keyframes move3
+    {
+        0%  {
+            left: calc(20% - 110px); opacity: 0.0;
+        }
+    37.5%  {
+            left: calc(60% - 110px); opacity: 0.8;
+        }
+        75% {
+            left: calc(60% - 110px); opacity: 0.8;
+        }
+        85% {
+            left: 80%; opacity: 0;
+        }
+        100% {
+            opacity: 0;
+        }
     }
-   37.5%  {
-        left: calc(60% - 110px); opacity: 0.8;
-    }
-    75% {
-        left: calc(60% - 110px); opacity: 0.8;
-    }
-    85% {
-        left: 80%; opacity: 0;
-    }
-    100% {
-        opacity: 0;
-    }
-}
 
-.threadpool-count {
-    border:1px solid #555;
-    padding: 28px;
-    width:180px;
-    height:50px;;
-    border-radius: 1rem;
-    display:flex;
-    justify-content:space-between;
-}
+    .threadpool-count {
+        border:1px solid #555;
+        padding: 28px;
+        width:180px;
+        height:50px;;
+        border-radius: 1rem;
+        display:flex;
+        justify-content:space-between;
+    }
 
 #thread-count-t2 {
-  margin-top:5px;
-  margin-left:135px;
-  -webkit-animation: thread-count-t2 6s infinite;
-}
+    margin-top:5px;
+    margin-left:135px;
+    -webkit-animation: thread-count-t2 6s infinite;
+    }
 
-.threadpool-count-container {
-    position: relative;
-    padding: 36px 0px 42px 0px;
-    width: 100%;
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    justify-content:center;
-}
+    .threadpool-count-container {
+        position: relative;
+        padding: 36px 0px 42px 0px;
+        width: 100%;
+        display:flex;
+        flex-direction:column;
+        align-items:center;
+        justify-content:center;
+    }
 
-.thread-count-message {
-    height:20px;
-    width: 230px;
-    font-size:14px;
-    text-align:center;
-    position:relative;
-}
+    .thread-count-message {
+        height:20px;
+        width: 230px;
+        font-size:14px;
+        text-align:center;
+        position:relative;
+    }
 
 #thread-count-message1 {
-    position:absolute;
-    -webkit-animation: thread-count-message1 6s infinite;
-}
+        position:absolute;
+        -webkit-animation: thread-count-message1 6s infinite;
+    }
 #thread-count-message2 {
-    position:absolute;
-    -webkit-animation: thread-count-message2 6s infinite;
-}
+        position:absolute;
+        -webkit-animation: thread-count-message2 6s infinite;
+    }
 
-@-webkit-keyframes thread-count-t2
-{
-    0%  {
-        margin-left:135px; opacity: 0.8;
+    @-webkit-keyframes thread-count-t2
+    {
+        0%  {
+            margin-left:135px; opacity: 0.8;
+        }
+        33%  {
+            margin-left:135px; opacity: 0.8;
+        }
+        75% {
+            margin-left:300px; opacity:0;
+        }
+        100% {
+            margin-left:300px; opacity:0;
+        }
     }
-    33%  {
-        margin-left:135px; opacity: 0.8;
-    }
-    75% {
-        margin-left:300px; opacity:0;
-    }
-    100% {
-        margin-left:300px; opacity:0;
-    }
-}
 
-@-webkit-keyframes thread-count-message1
-{
-    0%  {
-        opacity: 1;
+    @-webkit-keyframes thread-count-message1
+    {
+        0%  {
+            opacity: 1;
+        }
+        49%  {
+            opacity: 1;
+        }
+        50% {
+            opacity: 0;
+        }
+        100% {
+            opacity: 0;
+        }
     }
-    49%  {
-        opacity: 1;
-    }
-    50% {
-        opacity: 0;
-    }
-    100% {
-        opacity: 0;
-    }
-}
 
-@-webkit-keyframes thread-count-message2
-{
-    0%  {
-        opacity: 0;
+    @-webkit-keyframes thread-count-message2
+    {
+        0%  {
+            opacity: 0;
+        }
+        49%  {
+            opacity: 0;
+        }
+        50% {
+            opacity: 1;
+        }
+        100% {
+            opacity: 1;
+        }
     }
-    49%  {
-        opacity: 0;
-    }
-    50% {
-        opacity: 1;
-    }
-    100% {
-        opacity: 1;
-    }
-}
-</style>
-    {% endblock %}
+    </style>
+{% endblock %}
+
+{% insert body %}
+    <h2 class="writing-header">Figuring out threadpools</h2>
+    <p>
+    I have found myself crossing-paths with threadpools quite a lot
+    over the last few weeks. For my first encounter, I found myself pouring
+    over the
+    <a href="https://fastapi.tiangolo.com/async/#path-operation-functions">
+        fast-api
+    </a>
+    docs in an attempt to better understand how it dispatches functions to
+    it's external threadpool (outside the main event-loop). Not long
+    afterwards (during my orderbook
+    rewrite<a id="ref-1" href="#1"><sup>[1]</sup></a>),
+    I began to think about matching-engines again, specifically,
+    high-throughput message handling once an order has been executed
+    (@ 100k's messages p/s). As a matching-engine operates on orders
+    sequentially—where resource allocation is focused on processing incoming
+    orders as fast as possible—post-trade execution requires a pragmatic
+    approach to handling those trade messages reliably outside of the core
+    matching-engine logic (at least that's how I've always interpreted it).
+    This is where threadpools began to show their relevance once more
+    (frequency illusion at it's finest). What this post entails is a brief
+    overview of threadpools, how I went about implementing one and some of
+    the interesting things I learned along the way 🕳️🐇.
+    </p>
+
+    <h3 class="writing-header">What are threadpools and why use them?</h3>
+    <p>
+    Using multiple threads (of execution) allows for multiple tasks to be
+    scheduled within a single process in such a way that they can be
+    handled concurrently. What this means is that rather than waiting for a
+    single function to execute sequentially before moving to the next,
+    a process can try to optimize it's pipeline by scheduling tasks
+    in such a way as to minimize idle time between instructions (e.g.
+    executing instructions in another function while waiting for an
+    asynchronous call to complete). An important cavaet here is that
+    instantiating a thread is an expensive endeavour. A thread runtime
+    requires it's own stack along with copying over any relevant state from
+    the parent thread before beginning execution, all of which requires
+    kernel involvement for scheduler and memory allocation.
+    </p>
+
+    <div class="threadpool-figure">
+        <div class="threadpool-container">
+            <div class="threadpool-taskqueue">
+                <div id="thread-t5" class="thread-ball"><span class="task">T5</span></div>
+                <div id="thread-t4" class="thread-ball"><span class="task">T4</span></div>
+            </div>
+            <svg viewBox="0 -60 140 140" class="thread-arrow-produce">
+                <defs>
+                <marker id='head' orient="auto"
+                    markerWidth='3' markerHeight='4'
+                    refX='0.1' refY='2'>
+                    <path d='M0,0 V4 L2,2 Z'/>
+                </marker>
+                </defs>
+
+                <path
+                id='arrow-line'
+                marker-end='url(#head)'
+                stroke-width='2'
+                fill='none'
+                d='M0, 10, 120 -100, 0'
+                />
+                <path
+                id='arrow-line'
+                marker-end='url(#head)'
+                stroke-width='2'
+                fill='none'
+                d='M0, 10, 120 10, 0'
+                />
+                <path
+                id='arrow-line'
+                marker-end='url(#head)'
+                stroke-width='2'
+                fill='none'
+                d='M0, 10, 120 120, 0'
+                />
+            </svg>
+            <div class="threadpool">
+                <div class="thread-col">
+                <div class="thread-ball" style="margin-top:5px;margin-left:10px;"><span class="task">T1</span></div>
+                <svg class="thread" version="1.1" viewBox="0 0 95 95" xml:space="preserve" xmlns="http://www.w3.org/2000/svg"><path d="m19.045 16.978c7.6152-6.4648 17.438-9.8955 27.059-9.6831l0.043945 1.3022 3.6152-4.2749-3.9082-4.3218 0.043945 1.3018c-11.022 0.83301-21.466 5.8076-28.898 13.484-7.4951 7.6274-11.964 17.873-12.502 28.194 1.54-10.231 6.8975-19.599 14.547-26.002z"/><path d="m75.955 78.021c-7.6152 6.4658-17.438 9.8965-27.059 9.6836l-0.043945-1.3018-3.6152 4.2744 3.9082 4.3223-0.043945-1.3018c11.022-0.83301 21.467-5.8076 28.898-13.484 7.4961-7.6279 11.964-17.872 12.503-28.194-1.54 10.23-6.8984 19.6-14.548 26.002z"/><path d="m16.978 75.955c-6.4648-7.6152-9.8955-17.438-9.6826-27.059l1.3018-0.044922-4.2754-3.6147-4.3213 3.9087 1.3018-0.043945c0.83301 11.021 5.8076 21.467 13.483 28.898 7.6279 7.4951 17.873 11.964 28.195 12.502-10.231-1.5391-19.6-6.8975-26.003-14.547z"/><path d="m93.698 45.898c-0.83301-11.022-5.8076-21.466-13.484-28.898-7.627-7.4961-17.873-11.964-28.194-12.503 10.231 1.54 19.599 6.8984 26.002 14.548 6.4658 7.6152 9.8955 17.438 9.6836 27.058l-1.3018 0.044434 4.2754 3.6157 4.3213-3.9092-1.3018 0.044434z"/></svg>
+                <svg class="thread" version="1.1" viewBox="0 0 95 95" xml:space="preserve" xmlns="http://www.w3.org/2000/svg"><path d="m19.045 16.978c7.6152-6.4648 17.438-9.8955 27.059-9.6831l0.043945 1.3022 3.6152-4.2749-3.9082-4.3218 0.043945 1.3018c-11.022 0.83301-21.466 5.8076-28.898 13.484-7.4951 7.6274-11.964 17.873-12.502 28.194 1.54-10.231 6.8975-19.599 14.547-26.002z"/><path d="m75.955 78.021c-7.6152 6.4658-17.438 9.8965-27.059 9.6836l-0.043945-1.3018-3.6152 4.2744 3.9082 4.3223-0.043945-1.3018c11.022-0.83301 21.467-5.8076 28.898-13.484 7.4961-7.6279 11.964-17.872 12.503-28.194-1.54 10.23-6.8984 19.6-14.548 26.002z"/><path d="m16.978 75.955c-6.4648-7.6152-9.8955-17.438-9.6826-27.059l1.3018-0.044922-4.2754-3.6147-4.3213 3.9087 1.3018-0.043945c0.83301 11.021 5.8076 21.467 13.483 28.898 7.6279 7.4951 17.873 11.964 28.195 12.502-10.231-1.5391-19.6-6.8975-26.003-14.547z"/><path d="m93.698 45.898c-0.83301-11.022-5.8076-21.466-13.484-28.898-7.627-7.4961-17.873-11.964-28.194-12.503 10.231 1.54 19.599 6.8984 26.002 14.548 6.4658 7.6152 9.8955 17.438 9.6836 27.058l-1.3018 0.044434 4.2754 3.6157 4.3213-3.9092-1.3018 0.044434z"/></svg>
+                <svg class="thread" version="1.1" viewBox="0 0 95 95" xml:space="preserve" xmlns="http://www.w3.org/2000/svg"><path d="m19.045 16.978c7.6152-6.4648 17.438-9.8955 27.059-9.6831l0.043945 1.3022 3.6152-4.2749-3.9082-4.3218 0.043945 1.3018c-11.022 0.83301-21.466 5.8076-28.898 13.484-7.4951 7.6274-11.964 17.873-12.502 28.194 1.54-10.231 6.8975-19.599 14.547-26.002z"/><path d="m75.955 78.021c-7.6152 6.4658-17.438 9.8965-27.059 9.6836l-0.043945-1.3018-3.6152 4.2744 3.9082 4.3223-0.043945-1.3018c11.022-0.83301 21.467-5.8076 28.898-13.484 7.4961-7.6279 11.964-17.872 12.503-28.194-1.54 10.23-6.8984 19.6-14.548 26.002z"/><path d="m16.978 75.955c-6.4648-7.6152-9.8955-17.438-9.6826-27.059l1.3018-0.044922-4.2754-3.6147-4.3213 3.9087 1.3018-0.043945c0.83301 11.021 5.8076 21.467 13.483 28.898 7.6279 7.4951 17.873 11.964 28.195 12.502-10.231-1.5391-19.6-6.8975-26.003-14.547z"/><path d="m93.698 45.898c-0.83301-11.022-5.8076-21.466-13.484-28.898-7.627-7.4961-17.873-11.964-28.194-12.503 10.231 1.54 19.599 6.8984 26.002 14.548 6.4658 7.6152 9.8955 17.438 9.6836 27.058l-1.3018 0.044434 4.2754 3.6157 4.3213-3.9092-1.3018 0.044434z"/></svg>
+                <div id="thread-t3" class="thread-ball"><span class="task">T3</span></div>
+                </div>
+                <div class="thread-col">
+                <svg class="thread" version="1.1" viewBox="0 0 95 95" xml:space="preserve" xmlns="http://www.w3.org/2000/svg"><path d="m19.045 16.978c7.6152-6.4648 17.438-9.8955 27.059-9.6831l0.043945 1.3022 3.6152-4.2749-3.9082-4.3218 0.043945 1.3018c-11.022 0.83301-21.466 5.8076-28.898 13.484-7.4951 7.6274-11.964 17.873-12.502 28.194 1.54-10.231 6.8975-19.599 14.547-26.002z"/><path d="m75.955 78.021c-7.6152 6.4658-17.438 9.8965-27.059 9.6836l-0.043945-1.3018-3.6152 4.2744 3.9082 4.3223-0.043945-1.3018c11.022-0.83301 21.467-5.8076 28.898-13.484 7.4961-7.6279 11.964-17.872 12.503-28.194-1.54 10.23-6.8984 19.6-14.548 26.002z"/><path d="m16.978 75.955c-6.4648-7.6152-9.8955-17.438-9.6826-27.059l1.3018-0.044922-4.2754-3.6147-4.3213 3.9087 1.3018-0.043945c0.83301 11.021 5.8076 21.467 13.483 28.898 7.6279 7.4951 17.873 11.964 28.195 12.502-10.231-1.5391-19.6-6.8975-26.003-14.547z"/><path d="m93.698 45.898c-0.83301-11.022-5.8076-21.466-13.484-28.898-7.627-7.4961-17.873-11.964-28.194-12.503 10.231 1.54 19.599 6.8984 26.002 14.548 6.4658 7.6152 9.8955 17.438 9.6836 27.058l-1.3018 0.044434 4.2754 3.6157 4.3213-3.9092-1.3018 0.044434z"/></svg>
+                <svg class="thread" version="1.1" viewBox="0 0 95 95" xml:space="preserve" xmlns="http://www.w3.org/2000/svg"><path d="m19.045 16.978c7.6152-6.4648 17.438-9.8955 27.059-9.6831l0.043945 1.3022 3.6152-4.2749-3.9082-4.3218 0.043945 1.3018c-11.022 0.83301-21.466 5.8076-28.898 13.484-7.4951 7.6274-11.964 17.873-12.502 28.194 1.54-10.231 6.8975-19.599 14.547-26.002z"/><path d="m75.955 78.021c-7.6152 6.4658-17.438 9.8965-27.059 9.6836l-0.043945-1.3018-3.6152 4.2744 3.9082 4.3223-0.043945-1.3018c11.022-0.83301 21.467-5.8076 28.898-13.484 7.4961-7.6279 11.964-17.872 12.503-28.194-1.54 10.23-6.8984 19.6-14.548 26.002z"/><path d="m16.978 75.955c-6.4648-7.6152-9.8955-17.438-9.6826-27.059l1.3018-0.044922-4.2754-3.6147-4.3213 3.9087 1.3018-0.043945c0.83301 11.021 5.8076 21.467 13.483 28.898 7.6279 7.4951 17.873 11.964 28.195 12.502-10.231-1.5391-19.6-6.8975-26.003-14.547z"/><path d="m93.698 45.898c-0.83301-11.022-5.8076-21.466-13.484-28.898-7.627-7.4961-17.873-11.964-28.194-12.503 10.231 1.54 19.599 6.8984 26.002 14.548 6.4658 7.6152 9.8955 17.438 9.6836 27.058l-1.3018 0.044434 4.2754 3.6157 4.3213-3.9092-1.3018 0.044434z"/></svg>
+                <svg class="thread" version="1.1" viewBox="0 0 95 95" xml:space="preserve" xmlns="http://www.w3.org/2000/svg"><path d="m19.045 16.978c7.6152-6.4648 17.438-9.8955 27.059-9.6831l0.043945 1.3022 3.6152-4.2749-3.9082-4.3218 0.043945 1.3018c-11.022 0.83301-21.466 5.8076-28.898 13.484-7.4951 7.6274-11.964 17.873-12.502 28.194 1.54-10.231 6.8975-19.599 14.547-26.002z"/><path d="m75.955 78.021c-7.6152 6.4658-17.438 9.8965-27.059 9.6836l-0.043945-1.3018-3.6152 4.2744 3.9082 4.3223-0.043945-1.3018c11.022-0.83301 21.467-5.8076 28.898-13.484 7.4961-7.6279 11.964-17.872 12.503-28.194-1.54 10.23-6.8984 19.6-14.548 26.002z"/><path d="m16.978 75.955c-6.4648-7.6152-9.8955-17.438-9.6826-27.059l1.3018-0.044922-4.2754-3.6147-4.3213 3.9087 1.3018-0.043945c0.83301 11.021 5.8076 21.467 13.483 28.898 7.6279 7.4951 17.873 11.964 28.195 12.502-10.231-1.5391-19.6-6.8975-26.003-14.547z"/><path d="m93.698 45.898c-0.83301-11.022-5.8076-21.466-13.484-28.898-7.627-7.4961-17.873-11.964-28.194-12.503 10.231 1.54 19.599 6.8984 26.002 14.548 6.4658 7.6152 9.8955 17.438 9.6836 27.058l-1.3018 0.044434 4.2754 3.6157 4.3213-3.9092-1.3018 0.044434z"/></svg>
+                <div id="thread-t2" class="thread-ball"><span class="task">T2</span></div>
+                </div>
+            </div>
+        </div>
+        <p style="font-size:14px; text-align:center;">
+        Threadpool overview: Each task (<span style="padding-right:1px;" class="math">T</span>) is enqueued before being executed by a thread</br>
+        <i>(note the fixed number of threads in the pool)</i>
+        </p>
+    </div>
+
+    <p>
+    This is where threadpools come into play. Threadpools can offer an
+    efficient implementation of the traditional multi-threaded model by
+    providing a (fixed) series of long-running threads of execution (pool),
+    rather than going through unnecessary and repeated creation and teardown
+    of threads as work arises. Limiting the number of threads being created
+    can also help mitigate potential resource contention, consumption and
+    excessive context-switching. The important thing to note when using
+    threadpools is that they are rather inelastic, by that I mean, we
+    want to have a relatively good idea of our average workload before
+    deciding to use a threadpool. Afterall, this inelasticity is what can
+    make a threadpool more efficient than spawning threads on demand.
+    </p>
+
+    <h3 class="writing-header">Threadpool considerations</h3>
+    <p>
+    I'll try not to get into the details of threadpool implementations too
+    much as I believe the design considerations offer a better insight into
+    how they operate. The program was written in C and turned out to be much
+    more compact and simple than I anticipated (which I'm super happy about).
+    For those curious about the technical details, I'll provide a link to
+    the source code of <i>thool</i>
+    below<a id="ref-2" href="#2"><sup>[2]</sup></a>.
+    For now, here are some of the considerations and common patterns that I
+    found interesting while writing thool.
+    </p>
+
+    <p>
+    <ul>
+    <li>
+    <b>Taskqueue:</b> Acts as a container for incoming tasks
+    which reside there until being pulled by an idle worker. Each
+    <code>task</code> object comprises of a function and an argument
+    property.
+    A worker will pull a task from the queue and execute the function using
+    the given arguments (if any were given). There appeared to be two common
+    approaches to implementing a taskqueue, by using a linked-list or a
+    circular buffer. Using a linked-list offers more flexibility through an
+    unbounded-queue, i.e., it can grow indefinitely, opening up the
+    possibility to adopting a truly lock-free, unbounded queueing
+    mechanism. However, with these benefits comes the cost of frequent
+    <code>malloc</code> and <code>free</code> usage, an expensive set of
+    calls that I would like to avoid. The circular-buffer on the other-hand,
+    is the antithesis of the linked-list. While it is bounded to how many
+    tasks it can accomadate, we can drastically minimize the number of
+    allocations required. Along with the circular buffer, mutexes become a
+    good default option, as I find them easier to reason about and there is
+    potential to be blocked by the queue size anyways.
+    </li>
+    <div class="taskqueue-container">
+        <div class="lock-container left-lock">
+            <div class="enqueue"></div>
+            <p class="enqueue-p">
+                Mutex
+            </p>
+        </div>
+        <div id="ball1" class="ball"><span class="task">T1</span></div>
+        <div id="ball2" class="ball"><span class="task">T2</span></div>
+        <div id="ball3" class="ball"><span class="task">T3</span></div>
+        <div class="lock-container right-lock">
+            <div class="dequeue"></div>
+            <p class="dequeue-p">
+                Mutex
+            </p>
+        </div>
+        <div id="dequeue-info-message" class="info-message">
+            Producer acquires mutex and enqueues tasks
+        </div>
+        <div id="enqueue-info-message" class="info-message">
+            Consumer acquires mutex and pulls tasks
+        </div>
+    </div>
+    <li>
+    <b>Fixed vs. dynamic threads:</b> While I've spoke about the
+    inelasticity of threadpools earlier, this is still worth quickly
+    exploring. Aside from the expense of creating / destroying threads,
+    having a dynamic threadpool doesn't make sense entirely, because the
+    benefits of a threadpool are to avoid such expensive operations. For
+    this reason, you will likely see a fixed number of threads being created
+    on threadpool creation.
+    </li>
+    <li>
+    <b>Conditional variables:</b> Provide a wonderful mechanism for
+    communicating a binary state between a group of threads using a mutex.
+    Threads can
+    be made to <code>wait</code> when a given scenario is met (e.g. no
+    tasks to process) and be notified or <code>signal</code>led once that
+    state of the system changes. This allows us to avoid the cost of
+    constantly spinning threads like you would see in a spin-lock for
+    example and helps to save CPU cycles. In thool, you will find a
+    single cond-var used to signal a thread to wait while the
+    <code>taskqueue</code> is empty and to awaken when there are tasks
+    pending. I believe a binary-sempahore could also be used similarily
+    here but it's not something I am familiar with and it didn't feel
+    entirely appropriate compared to using conditional variables.
+    </li>
+    <li>
+    <b>Locking mechanisms:</b> There were two sections of the threadpool
+    that needed to be synchronised across threads: <code>thread_count</code>,
+    was responsible for managing the number of alive and active threads in
+    the threadpool and <code>taskqueue_lock</code>, which governed which
+    thread had control over the taskqueues read-write privilege.
+    Fortunately, synchronisation is mutually exclusive which means a small
+    number of mutexes can be used to govern threadpool state effectively.
+    <div class="threadpool-figure">
+        <div class="threadpool-count-container">
+            <div class="threadpool-count">
+                <div class="thread-ball" style="margin-top:5px;margin-left:5px;"><span class="task">T1</span></div>
+                <svg class="thread" version="1.1" viewBox="0 0 95 95" xml:space="preserve" xmlns="http://www.w3.org/2000/svg"><path d="m19.045 16.978c7.6152-6.4648 17.438-9.8955 27.059-9.6831l0.043945 1.3022 3.6152-4.2749-3.9082-4.3218 0.043945 1.3018c-11.022 0.83301-21.466 5.8076-28.898 13.484-7.4951 7.6274-11.964 17.873-12.502 28.194 1.54-10.231 6.8975-19.599 14.547-26.002z"/><path d="m75.955 78.021c-7.6152 6.4658-17.438 9.8965-27.059 9.6836l-0.043945-1.3018-3.6152 4.2744 3.9082 4.3223-0.043945-1.3018c11.022-0.83301 21.467-5.8076 28.898-13.484 7.4961-7.6279 11.964-17.872 12.503-28.194-1.54 10.23-6.8984 19.6-14.548 26.002z"/><path d="m16.978 75.955c-6.4648-7.6152-9.8955-17.438-9.6826-27.059l1.3018-0.044922-4.2754-3.6147-4.3213 3.9087 1.3018-0.043945c0.83301 11.021 5.8076 21.467 13.483 28.898 7.6279 7.4951 17.873 11.964 28.195 12.502-10.231-1.5391-19.6-6.8975-26.003-14.547z"/><path d="m93.698 45.898c-0.83301-11.022-5.8076-21.466-13.484-28.898-7.627-7.4961-17.873-11.964-28.194-12.503 10.231 1.54 19.599 6.8984 26.002 14.548 6.4658 7.6152 9.8955 17.438 9.6836 27.058l-1.3018 0.044434 4.2754 3.6157 4.3213-3.9092-1.3018 0.044434z"/></svg>
+                <svg class="thread" version="1.1" viewBox="0 0 95 95" xml:space="preserve" xmlns="http://www.w3.org/2000/svg"><path d="m19.045 16.978c7.6152-6.4648 17.438-9.8955 27.059-9.6831l0.043945 1.3022 3.6152-4.2749-3.9082-4.3218 0.043945 1.3018c-11.022 0.83301-21.466 5.8076-28.898 13.484-7.4951 7.6274-11.964 17.873-12.502 28.194 1.54-10.231 6.8975-19.599 14.547-26.002z"/><path d="m75.955 78.021c-7.6152 6.4658-17.438 9.8965-27.059 9.6836l-0.043945-1.3018-3.6152 4.2744 3.9082 4.3223-0.043945-1.3018c11.022-0.83301 21.467-5.8076 28.898-13.484 7.4961-7.6279 11.964-17.872 12.503-28.194-1.54 10.23-6.8984 19.6-14.548 26.002z"/><path d="m16.978 75.955c-6.4648-7.6152-9.8955-17.438-9.6826-27.059l1.3018-0.044922-4.2754-3.6147-4.3213 3.9087 1.3018-0.043945c0.83301 11.021 5.8076 21.467 13.483 28.898 7.6279 7.4951 17.873 11.964 28.195 12.502-10.231-1.5391-19.6-6.8975-26.003-14.547z"/><path d="m93.698 45.898c-0.83301-11.022-5.8076-21.466-13.484-28.898-7.627-7.4961-17.873-11.964-28.194-12.503 10.231 1.54 19.599 6.8984 26.002 14.548 6.4658 7.6152 9.8955 17.438 9.6836 27.058l-1.3018 0.044434 4.2754 3.6157 4.3213-3.9092-1.3018 0.044434z"/></svg>
+                <svg class="thread" version="1.1" viewBox="0 0 95 95" xml:space="preserve" xmlns="http://www.w3.org/2000/svg"><path d="m19.045 16.978c7.6152-6.4648 17.438-9.8955 27.059-9.6831l0.043945 1.3022 3.6152-4.2749-3.9082-4.3218 0.043945 1.3018c-11.022 0.83301-21.466 5.8076-28.898 13.484-7.4951 7.6274-11.964 17.873-12.502 28.194 1.54-10.231 6.8975-19.599 14.547-26.002z"/><path d="m75.955 78.021c-7.6152 6.4658-17.438 9.8965-27.059 9.6836l-0.043945-1.3018-3.6152 4.2744 3.9082 4.3223-0.043945-1.3018c11.022-0.83301 21.467-5.8076 28.898-13.484 7.4961-7.6279 11.964-17.872 12.503-28.194-1.54 10.23-6.8984 19.6-14.548 26.002z"/><path d="m16.978 75.955c-6.4648-7.6152-9.8955-17.438-9.6826-27.059l1.3018-0.044922-4.2754-3.6147-4.3213 3.9087 1.3018-0.043945c0.83301 11.021 5.8076 21.467 13.483 28.898 7.6279 7.4951 17.873 11.964 28.195 12.502-10.231-1.5391-19.6-6.8975-26.003-14.547z"/><path d="m93.698 45.898c-0.83301-11.022-5.8076-21.466-13.484-28.898-7.627-7.4961-17.873-11.964-28.194-12.503 10.231 1.54 19.599 6.8984 26.002 14.548 6.4658 7.6152 9.8955 17.438 9.6836 27.058l-1.3018 0.044434 4.2754 3.6157 4.3213-3.9092-1.3018 0.044434z"/></svg>
+                <div id="thread-count-t2" class="thread-ball"><span class="task">T2</span></div>
+            </div>
+            <div class="thread-count-message">
+                <p id="thread-count-message1">
+                    Alive threads:3&emsp;Working threads:2
+                </p>
+                <p id="thread-count-message2">
+                    Alive threads:3&emsp;Working threads:1
+                </p>
+            </div>
+        </div>
+    </div>
+    </li>
+    <li>
+    <b>Threadpool shutdowns:</b> Finally, it is worth considering how a
+    threadpool should behave on shutdown. I found this quite difficult to
+    implement and I went with a graceful approach overall, even if an
+    immediate shutdown is instructed. This was done to avoid ending-up in a
+    state where data permanent corruption of a system could occur. A great
+    example given by nachtimwald<a id="ref-3" href="#3"><sup>[3]</sup></a>
+    would be terminating a thread in the middle of a database transaction
+    which may leave us in a corrupted state. The behaviour of thool ended
+    up as follows, if an immediate shutdown is requested, threads are given
+    a chance to finish their <i>current</i> task. For a graceful shutdown,
+    no more tasks can be added to the queue and threads can attempt to empty
+    the taskqueue entirely. I'm not entirely sure if this is the best
+    approach, but I'm content with how it behaves for now.
+    </li>
+    </ul>
+    These were some of the main considerations when putting thool together.
+    What I found nice about discovering the above is that it distilled
+    the fundamental concepts of a threadpool quite succinctly and gave me
+    enough guidance to go out and implement a very simple version of one!
+    </p>
+    <h3 class="writing-header">Further thoughts</h3>
+    <p>
+    While I'm happy with the finished product, I think there are some
+    interesting areas that I would like to explore with thool. I would
+    like to consider adding in a <code>force_add</code> option when
+    queueing tasks onto the threadpool. While this would require a
+    <code>malloc</code> it would hopefully be logarithmic. Finally,
+    I think it would be nice to expand the thool library such that it
+    could be used on Windows machines. This would require writing  some kind
+    of wrapper around the <code>pthread</code> module as that is not
+    available on Windows runtimes. Anyways, I hope someone found this
+    useful in some way, I really enjoyed the process 🤙.
+    </p>
+
+    <p class="ref-url">
+        <a href="#ref-1">
+            [1]
+        </a>
+        <a id="1" href="/writing/12-Nov-2023.html">
+            Orderbook rewrite
+        </a>
+    </p>
+    <p class="ref-url">
+        <a href="#ref-2">
+            [2]
+        </a>
+        <a id="2" href="https://github.com/JakeBamrah/thool">
+            Thool: A lightweight threadpool library
+        </a>
+    </p>
+    <p class="ref-url">
+        <a href="#ref-3">
+            [3]
+        </a>
+        <a id="3" href="https://nachtimwald.com/">
+            John's blog
+        </a>
+    </p>
 {% endblock %}

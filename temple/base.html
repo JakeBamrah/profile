@@ -66,6 +66,7 @@
                 .footer { color: #666; }
             }
         </style>
+        {% insert head %}{% endblock %}
     </head>
 
     <body>
@@ -73,7 +74,7 @@
         <a class="main-url" href="/writing.html">writing</a>
         <a class="main-url" href="/reading.html">reading</a>
 
-        {% block body %}
+        {% insert body %}{% endblock %}
 
         <p class="footer">Built with <a href="https://github.com/JakeBamrah/temple">Temple</a></p>
     </body>
