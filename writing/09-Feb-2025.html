@@ -1,0 +1,835 @@
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>Jake—CV</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="820 🌚 and things...">
+    <meta http-equiv="Cache-Control" content="max-age=0, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦦</text></svg>">
+    <style>
+        :root {
+            --primary-font: 'Georgia', serif;
+            --secondary-font: 'Helvetica Neue', sans-serif;
+            --light-font: #555;
+            --bg-color: #fff5ed;
+        }
+
+        body {
+            max-width: 40em;
+            margin: 0 auto;
+            line-height: 1.5;
+            padding: 4em 1em;
+            font: 1.1rem/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+            color: var(--light-font);
+            text-align: justify;
+            font-family: var(--secondary-font);
+            background: var(--bg-color);
+        }
+
+        a:link {
+            color: var(--light-font);
+        }
+
+        a:visited {
+            color: #9e9e9e;
+        }
+
+        a.main-url {
+            margin-right: 1em;
+            color: var(--light-font);
+            font-family: var(--primary-font);
+        }
+
+        a.footer-url {
+            margin-right: 1em;
+        }
+
+        .ref-url {
+            line-height: 0.8em;
+        }
+
+        .writing-header {
+            text-align: left;
+        }
+
+        h1,
+        h2,
+        h3 {
+            margin-top: 1em;
+            padding-top: 1em;
+            font-weight: normal;
+            font-family: var(--primary-font);
+        }
+
+        h1,
+        h2,
+        h3,
+        strong {
+            color: #444;
+        }
+
+        .footer {
+            text-align: center;
+            font-size: 0.8em;
+            padding-top: 3.4em;
+            color: #9e9e9e;
+        }
+
+        .image-container {
+            height: 5em;
+            width: 5em;
+            background-size: contain;
+            border-radius: 50%;
+        }
+
+        span.math {
+            font-style: italic;
+            font-family: Times New Roman;
+        }
+
+        code {
+            background-color: #f8e9de;
+            padding: 0 2;
+            border-radius: 0.2em;
+        }
+
+        .note {
+            padding: 15px;
+            margin: 20px 0;
+            border-left: 4px solid;
+        }
+
+        .note {
+            background-color: #f8e9de;
+            border-left-color: #e6d5c9;
+            color: var(--light-font);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            body {
+                color: #ddd;
+                background-color: #222;
+            }
+
+            a:link {
+                color: #ddd;
+            }
+
+            a:visited {
+                color: #666;
+            }
+
+            a.main-url {
+                color: #fff;
+            }
+
+            code {
+                background-color: #333;
+            }
+
+            h1,
+            h2,
+            h3,
+            strong {
+                color: #fff;
+            }
+
+            .note {
+                background-color: #2a2a2a;
+                border-left-color: #444;
+                color: #ddd;
+            }
+
+            .footer {
+                color: #666;
+            }
+        }
+    </style>
+    
+<title>Delta Convergence Chart</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+
+<!-- mathjax related -->
+<script>
+    MathJax = {
+        tex: {
+            inlineMath: [['$', '$']],
+            displayMath: [['$$', '$$']],
+            processEscapes: true
+        }
+    };
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+    .controls {
+        margin-bottom: 20px;
+    }
+
+    .control-group {
+        margin-bottom: 15px;
+    }
+
+    .slider {
+        -webkit-appearance: none;
+        width: 100%;
+        height: 4px;
+        border-radius: 2px;
+        background: #e5e7eb;
+        outline: none;
+        margin: 10px 0;
+    }
+
+    .slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: #2563eb;
+        cursor: pointer;
+        border: 2px solid white;
+        box-shadow: 0 0 0 1px #2563eb;
+    }
+
+    .slider::-moz-range-thumb {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: #2563eb;
+        cursor: pointer;
+        border: 2px solid white;
+        box-shadow: 0 0 0 1px #2563eb;
+    }
+
+    .label-row {
+        display: flex;
+        justify-content: space-between;
+        font-size: 14px;
+        color: #666;
+    }
+
+    .checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        color: #666;
+        cursor: pointer;
+    }
+</style>
+
+</head>
+
+<body>
+    <a class="main-url" href="/">about</a>
+    <a class="main-url" href="/writing.html">writing</a>
+    <a class="main-url" href="/reading.html">reading</a>
+
+    
+<div>
+    <h2 class="writing-header">Digital options</h2>
+
+    <div class="note">
+        <em>Note: This post serves as a placeholder for my thoughts and will change over time as my understanding of
+            this topic (hopefully) improves.</em>
+    </div>
+
+    <p>I recently came across the digital option—while reading <em>Volatility: Practical Options Theory</em>—A.Iqbal—and
+        it really peaked my curiosity! So, I thought I would write about it in an attempt to grasp my understanding of
+        it.</p>
+
+    <h3 class="writing-header">Delta as the probability of an ITM expiry</h3>
+    <p>To begin, we need to build from the concept of <em>delta</em>—the rate of change of an option-price ($V_t$)
+        relative to it's underlying ($S_t$)—a greek (options) symbol that represents the partial-derivative of $S_t$ in
+        the function for pricing an option:</p>
+
+    $$
+    \Delta \equiv \Delta(S_t, t, \sigma_i) = \frac{\partial V(S_t, t, \sigma_i)}{\partial S}
+    $$
+
+    <p>As a first-order derivative of the underlying, delta is fundamental in understanding how an option is priced so
+        let's quickly outline some of it's most important qualities:</p>
+    <ul>
+        <li>It not only represents the change in an option price but also the probability in which that option price
+            will expire <em>in-the-money</em> (ITM) where $\Delta = \text{Prob}(S_T > K)$. <em>(todo: write about
+                how/why this is the case)</em></li>
+        <li>It's PDF follows a normal-distribution $~N(\sigma, \mu)$ where $\sigma$ represents volatility and $\mu$ is
+            the current price of the underlying.</li>
+        <li>It's CDF is the indicator for the probability of the price given at expiry</li>
+        <li>Delta is greatest at $K$ which is <em>at-the-money</em> (ATM) where $\Delta \approx 0.5$
+            <ul>
+                <li>In other words, the highest point of the PDF curve</li>
+                <li>This point is also where the gradient of the delta partial-derivative function is steepest</li>
+                <li>The deeper OTM or ITM an option falls within, the smaller the gradient of this function</li>
+            </ul>
+        </li>
+        <li>It can be positive or negative, ranging from $[-1, 0]$ for puts and $[0, 1]$ for calls
+            <ul>
+                <li>Closer to $|1|$ indicates a very high probability that an option will expire ITM</li>
+                <li>Closer to $0$ indicates a very high probability that an option will expire OTM</li>
+            </ul>
+        </li>
+    </ul>
+
+    <p>Most of these points can be nicely summarised in the figure below, where the the orange line illustrates the PDF
+        of a call ATM and the yellow line represents the rate of change that delta takes-on as the price of the
+        underlying changes.</p>
+
+    <canvas id="deltaOptionsPayoffChart"></canvas>
+
+    <p>An useful point-of-view for practical options trading is to think of $\Delta_t$ as the time $t$ conditional
+        probability that an option expires ITM, a fast and intuitive way to (approximately) identify relative value
+        opportunities in options.</p>
+
+    <h3 class="writing-header">The Digital option</h3>
+    <p>This brings us to the digital (or binary) option, which is a beautiful illustration of how delta represents this
+        probability ($S_T > K$) and gives the trader an opportunity to <em>directly</em> trade that probability in a
+        binary fashion using our option value function at time $t$:</p>
+
+    $$
+    V_t = \mathbb{E}_t[V_T] = \mathbb{E}_t[\max(S_T - K, 0)]
+    $$
+
+    <p>i.e. the price of an option today is equal to the market's expectation of the payoff at time $T$. By applying the
+        above equation to the price of strike $K$ by our digital ($D_t$) we can see that:</p>
+
+    $$
+    D_t = \mathbb{E}_t[1_{S_T > K}] = \text{Prob}_t(S_T > K)
+    $$
+
+    <p>In words, the price of the digital is <em>exactly</em> the probability that a vanilla call option with strike K
+        expires ITM. Leaving us with the resulting <em>binary</em> pay-off diagram.</p>
+
+    <canvas id="digitalOptionsPayoffChart"></canvas>
+
+    <h3 class="writing-header">The Unit call-spread</h3>
+    <p>Now that we understand what a digital option is, how can we trade such a product? The simplest way is to
+        synthesise a <em>unit call-spread</em>, simply put, a unit call-spread can be manufactured by taking our strike
+        $(K)$ and both purchasing / selling a call-option around that strike to given delta $(\delta)$.</p>
+
+    <p>The payoff profile generated by this synthetic (purchasing a call at $K - \delta$ and selling a call at $K +
+        \delta$) is demonstrated below. Notice, that as our $\delta$ becomes smaller, it converges to the payoff profile
+        of the digital presented earlier.</p>
+
+    <div class="controls">
+        <div class="control-group">
+            <div class="label-row">
+                <span>Delta (δ)</span>
+                <span id="deltaValue">0.020</span>
+            </div>
+            <input type="range" id="deltaSlider" class="slider" min="0.001" max="0.05" step="0.001" value="0.02">
+        </div>
+        <div class="control-group">
+            <div class="label-row">
+                <span>Strike (K)</span>
+                <span id="strikeValue">1.370</span>
+            </div>
+            <input type="range" id="strikeSlider" class="slider" min="1.34" max="1.40" step="0.001" value="1.37">
+        </div>
+        <label class="checkbox-label">
+            <input type="checkbox" id="compareDeltas">
+            Compare multiple deltas
+        </label>
+    </div>
+    <canvas id="unitCallOptionsPayoffChart"></canvas>
+
+    <p>Suppose instead that the notional is set to ${1}/{2\delta}$. In this case the payoff would be shown in our
+        diagram above using the largest delta (in red). We can see that the payoff of the call spread is not too
+        dissimilar to that of the digital in that, above 1.39 both the digital and the call spread pay 1 USD and
+        below 1.35 they both pay nothing, the payoff is capped at 1 USD. Pricing a unit call-spread can be
+        summarised as follows:</p>
+
+    $$
+    \frac{1}{2\delta}(V(S_t, K - \delta, t, \sigma_i) - V(S_t, K + \delta, t, \sigma_i))
+    $$
+
+    <h3 class="writing-header">Hedging digital exposures</h3>
+    <p><em>We'll get there eventually...</em></p>
+
+    <script>
+        function generateData(delta, strikePrice) {
+            const data = [];
+            for (let x = 1.33; x <= 1.41; x += 0.002) {
+                let payoff = delta === 0
+                    ? (x > strikePrice ? 1 : 0)
+                    : Math.max(0, Math.min(1, (x - (strikePrice - delta)) / (2 * delta)));
+                data.push({ x: x, y: payoff });
+            }
+            return data;
+        }
+
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        let ctx = document.getElementById('unitCallOptionsPayoffChart').getContext('2d');
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                datasets: [{
+                    label: 'Digital Option',
+                    data: generateData(0, 1.37),
+                    borderColor: '#ffeb8f',
+                    borderWidth: 2,
+                    stepped: 'before',
+                    fill: false,
+                    pointRadius: 0
+                }, {
+                    label: 'δ = 0.0200',
+                    data: generateData(0.02, 1.37),
+                    borderColor: '#a82824',
+                    borderWidth: 2,
+                    stepped: false,
+                    fill: false,
+                    pointRadius: 0,
+                    tension: 0.2
+                }, {
+                    label: 'δ = 0.0100',
+                    data: generateData(0.01, 1.37),
+                    borderColor: '#d88b5f',
+                    borderWidth: 1.5,
+                    stepped: false,
+                    fill: false,
+                    hidden: true,
+                    pointRadius: 0,
+                    tension: 0.2
+                }, {
+                    label: 'δ = 0.0050',
+                    data: generateData(0.005, 1.37),
+                    borderColor: '#eecb96',
+                    borderWidth: 1.5,
+                    stepped: false,
+                    fill: false,
+                    hidden: true,
+                    pointRadius: 0,
+                    tension: 0.2
+                }]
+            },
+            options: {
+                animation: {
+                    duration: 150,
+                    easing: 'easeOutQuad'
+                },
+                responsive: true,
+                interaction: {
+                    intersect: false,
+                    mode: 'index'
+                },
+                scales: {
+                    x: {
+                        type: 'linear',
+                        display: true,
+                        title: {
+                            display: true,
+                            text: 'EUR-USD Spot Level'
+                        },
+                        min: 1.33,
+                        max: 1.41,
+                        grid: {
+                            color: '#f0f0f0'
+                        }
+                    },
+                    y: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: 'Pay-off in millions (USD)'
+                        },
+                        min: 0,
+                        max: 1.1,
+                        grid: {
+                            color: '#f0f0f0'
+                        }
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        backgroundColor: 'white',
+                        titleColor: '#666',
+                        bodyColor: '#666',
+                        borderColor: '#e5e7eb',
+                        borderWidth: 1,
+                        padding: 10,
+                        cornerRadius: 4,
+                        callbacks: {
+                            title: function (tooltipItems) {
+                                return `Spot: ${parseFloat(tooltipItems[0].parsed.x).toFixed(3)}`;
+                            },
+                            label: function (context) {
+                                return `${context.dataset.label}: ${context.parsed.y.toFixed(3)}`;
+                            }
+                        }
+                    },
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            usePointStyle: true,
+                            padding: 20,
+                            font: {
+                                size: 12
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        function smoothUpdateChart() {
+            requestAnimationFrame(() => {
+                const delta = parseFloat(document.getElementById('deltaSlider').value);
+                const strikePrice = parseFloat(document.getElementById('strikeSlider').value);
+                const compareDeltas = document.getElementById('compareDeltas').checked;
+
+                chart.data.datasets[0].data = generateData(0, strikePrice);
+                chart.data.datasets[1].data = generateData(delta, strikePrice);
+                chart.data.datasets[1].label = `δ = ${delta.toFixed(4)}`;
+                chart.data.datasets[2].data = generateData(delta * 0.5, strikePrice);
+                chart.data.datasets[2].label = `δ = ${(delta * 0.5).toFixed(4)}`;
+                chart.data.datasets[3].data = generateData(delta * 0.25, strikePrice);
+                chart.data.datasets[3].label = `δ = ${(delta * 0.25).toFixed(4)}`;
+
+                chart.data.datasets[2].hidden = !compareDeltas;
+                chart.data.datasets[3].hidden = !compareDeltas;
+
+                chart.update();
+            });
+        }
+
+        const debouncedUpdate = debounce(smoothUpdateChart, 16);
+
+        // event listeners
+        document.getElementById('deltaSlider').addEventListener('input', function (e) {
+            document.getElementById('deltaValue').textContent = parseFloat(e.target.value).toFixed(3);
+            debouncedUpdate();
+        });
+
+        document.getElementById('strikeSlider').addEventListener('input', function (e) {
+            document.getElementById('strikeValue').textContent = parseFloat(e.target.value).toFixed(3);
+            debouncedUpdate();
+        });
+
+        document.getElementById('compareDeltas').addEventListener('change', smoothUpdateChart);
+    </script>
+
+    <script>
+        const xPoints = Array.from({ length: 30 }, (_, i) => 1.33 + i * 0.003);
+        const K = 1.37;
+
+        // PDF curve data (normal distribution around K) - made more pronounced
+        const pdfData = xPoints.map(x => ({
+            x: x,
+            y: Math.exp(-Math.pow(x - K, 2) / 0.0002) * 2.5  // Increased height and narrowed spread
+        }));
+
+        // Delta curve data (sigmoid) - made steeper
+        const deltaData = xPoints.map(x => ({
+            x: x,
+            y: 1 / (1 + Math.exp(-(x - K) * 60)) * 2.5  // Increased steepness and height
+        }));
+
+        // Payoff profile with specific points
+        const payoffData = [
+            { x: 1.33, y: 0 },
+            { x: K, y: 0 },
+            { x: 1.42, y: 2.5 }  // Adjusted to match new scale
+        ];
+
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                datasets: [
+                    {
+                        label: 'ITM PDF',
+                        data: pdfData,
+                        borderColor: 'rgba(128, 128, 128, 0.8)',
+                        backgroundColor: 'rgba(128, 128, 128, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        borderWidth: 1.5
+                    },
+                    {
+                        label: 'Delta gradient',
+                        data: deltaData,
+                        borderColor: 'rgba(0, 200, 0, 0.8)',
+                        backgroundColor: 'transparent',
+                        fill: false,
+                        tension: 0.4,
+                        borderWidth: 1.5
+                    },
+                    {
+                        label: 'Payoff profile',
+                        data: payoffData,
+                        borderColor: 'black',
+                        backgroundColor: 'transparent',
+                        fill: false,
+                        tension: 0,
+                        borderWidth: 2,
+                        pointRadius: 3
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    x: {
+                        type: 'linear',
+                        position: 'bottom',
+                        grid: {
+                            color: 'rgba(200, 200, 200, 0.5)',
+                            drawTicks: false
+                        },
+                        ticks: {
+                            stepSize: 0.01
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            color: 'rgba(200, 200, 200, 0.5)',
+                            drawTicks: false
+                        },
+                        max: 3
+                    }
+                },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            usePointStyle: true,
+                            pointStyle: 'line'
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+
+    <script>
+        const callOptionsCtx = document.getElementById('deltaOptionsPayoffChart').getContext('2d');
+
+        // Generate data points with unique variable names
+        const spotPricePoints = Array.from({ length: 30 }, (_, i) => 1.33 + i * 0.003);
+        const strikePrice = 1.37;
+
+        // PDF curve data (normal distribution around strikePrice)
+        const normalDistData = spotPricePoints.map(x => ({
+            x: x,
+            y: Math.exp(-Math.pow(x - strikePrice, 2) / 0.0002) * 2.5
+        }));
+
+        // Delta curve data (sigmoid)
+        const optionDeltaData = spotPricePoints.map(x => ({
+            x: x,
+            y: 1 / (1 + Math.exp(-(x - strikePrice) * 60)) * 2.5
+        }));
+
+        // Payoff profile with specific points
+        const optionPayoffData = [
+            { x: 1.33, y: 0 },
+            { x: strikePrice, y: 0 },
+            { x: 1.42, y: 2.5 }
+        ];
+
+        new Chart(callOptionsCtx, {
+            type: 'line',
+            data: {
+                datasets: [
+                    {
+                        label: 'PDF',
+                        data: normalDistData,
+                        borderColor: '#ffeb8f',
+                        backgroundColor: 'rgba(255, 235, 143, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        borderWidth: 2
+                    },
+                    {
+                        label: 'Delta',
+                        data: optionDeltaData,
+                        borderColor: '#a82824',
+                        backgroundColor: 'transparent',
+                        fill: false,
+                        tension: 0.4,
+                        borderWidth: 2
+                    },
+                    {
+                        label: 'Payoff profile',
+                        data: optionPayoffData,
+                        borderColor: '#d88b5f',
+                        backgroundColor: 'transparent',
+                        fill: false,
+                        tension: 0,
+                        borderWidth: 2,
+                        pointRadius: 3
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    x: {
+                        type: 'linear',
+                        position: 'bottom',
+                        grid: {
+                            color: '#f0f0f0'
+                        },
+                        ticks: {
+                            stepSize: 0.01
+                        },
+                        title: {
+                            display: true,
+                            text: 'Spot level',
+                            font: {
+                                size: 14
+                            },
+                            padding: { top: 10, bottom: 0 }
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            color: '#f0f0f0'
+                        },
+                        max: 3,
+                        title: {
+                            display: true,
+                            text: 'Pay-off in millions (USD)',
+                            font: {
+                                size: 14
+                            },
+                            padding: { top: 0, bottom: 10 }
+                        }
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        backgroundColor: 'white',
+                        titleColor: '#666',
+                        bodyColor: '#666',
+                        borderColor: '#e5e7eb',
+                        borderWidth: 1,
+                        padding: 10,
+                        cornerRadius: 4,
+                        callbacks: {
+                            title: function (tooltipItems) {
+                                return `Spot: ${parseFloat(tooltipItems[0].parsed.x).toFixed(3)}`;
+                            },
+                            label: function (context) {
+                                return `${context.dataset.label}: ${context.parsed.y.toFixed(3)}`;
+                            }
+                        }
+                    },
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            usePointStyle: true,
+                            padding: 20,
+                            font: {
+                                size: 12
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        ctx = document.getElementById('digitalOptionsPayoffChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                datasets: [{
+                    label: 'Digital Option payoff profile',
+                    data: generateData(0, 1.37),
+                    borderColor: '#ffeb8f',
+                    borderWidth: 2,
+                    stepped: 'before',
+                    fill: false,
+                    pointRadius: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                interaction: {
+                    intersect: false,
+                    mode: 'index'
+                },
+                scales: {
+                    x: {
+                        type: 'linear',
+                        display: true,
+                        title: {
+                            display: true,
+                            text: 'EUR-USD Spot Level'
+                        },
+                        min: 1.33,
+                        max: 1.41,
+                        grid: {
+                            color: '#f0f0f0'
+                        }
+                    },
+                    y: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: 'Pay-off in millions (USD)'
+                        },
+                        min: 0,
+                        max: 1.1,
+                        grid: {
+                            color: '#f0f0f0'
+                        }
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        backgroundColor: 'white',
+                        titleColor: '#666',
+                        bodyColor: '#666',
+                        borderColor: '#e5e7eb',
+                        borderWidth: 1,
+                        padding: 10,
+                        cornerRadius: 4,
+                        callbacks: {
+                            title: function (tooltipItems) {
+                                return `Spot: ${parseFloat(tooltipItems[0].parsed.x).toFixed(3)}`;
+                            },
+                            label: function (context) {
+                                return `${context.dataset.label}: ${context.parsed.y.toFixed(3)}`;
+                            }
+                        }
+                    },
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            usePointStyle: true,
+                            padding: 20,
+                            font: {
+                                size: 12
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+
+</div>
+
+
+    <p class="footer">Built with <a href="https://github.com/JakeBamrah/temple">temple</a></p>
+</body>
+
+</html>

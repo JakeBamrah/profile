@@ -1,90 +1,163 @@
 <html lang="en">
-    <head>
-        <meta charset="utf-8">
-        <title>Jake—CV</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <meta name="description" content="820 🌚 and things...">
-        <meta http-equiv="Cache-Control" content="max-age=0, must-revalidate"/>
-        <meta http-equiv="Pragma" content="no-cache"/>
-        <meta http-equiv="Expires" content="0" />
-        <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦦</text></svg>">
-        <style>
-            :root {
-                --primary-font: 'Georgia', serif;
-                --secondary-font: 'Helvetica Neue', sans-serif;
-                --light-font: #555;
-                --bg-color: #fff5ed;
-            }
+
+<head>
+    <meta charset="utf-8">
+    <title>Jake—CV</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="820 🌚 and things...">
+    <meta http-equiv="Cache-Control" content="max-age=0, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦦</text></svg>">
+    <style>
+        :root {
+            --primary-font: 'Georgia', serif;
+            --secondary-font: 'Helvetica Neue', sans-serif;
+            --light-font: #555;
+            --bg-color: #fff5ed;
+        }
+
+        body {
+            max-width: 40em;
+            margin: 0 auto;
+            line-height: 1.5;
+            padding: 4em 1em;
+            font: 1.1rem/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+            color: var(--light-font);
+            text-align: justify;
+            font-family: var(--secondary-font);
+            background: var(--bg-color);
+        }
+
+        a:link {
+            color: var(--light-font);
+        }
+
+        a:visited {
+            color: #9e9e9e;
+        }
+
+        a.main-url {
+            margin-right: 1em;
+            color: var(--light-font);
+            font-family: var(--primary-font);
+        }
+
+        a.footer-url {
+            margin-right: 1em;
+        }
+
+        .ref-url {
+            line-height: 0.8em;
+        }
+
+        .writing-header {
+            text-align: left;
+        }
+
+        h1,
+        h2,
+        h3 {
+            margin-top: 1em;
+            padding-top: 1em;
+            font-weight: normal;
+            font-family: var(--primary-font);
+        }
+
+        h1,
+        h2,
+        h3,
+        strong {
+            color: #444;
+        }
+
+        .footer {
+            text-align: center;
+            font-size: 0.8em;
+            padding-top: 3.4em;
+            color: #9e9e9e;
+        }
+
+        .image-container {
+            height: 5em;
+            width: 5em;
+            background-size: contain;
+            border-radius: 50%;
+        }
+
+        span.math {
+            font-style: italic;
+            font-family: Times New Roman;
+        }
+
+        code {
+            background-color: #f8e9de;
+            padding: 0 2;
+            border-radius: 0.2em;
+        }
+
+        .note {
+            padding: 15px;
+            margin: 20px 0;
+            border-left: 4px solid;
+        }
+
+        .note {
+            background-color: #f8e9de;
+            border-left-color: #e6d5c9;
+            color: var(--light-font);
+        }
+
+        @media (prefers-color-scheme: dark) {
             body {
-                max-width: 40em;
-                margin: 0 auto;
-                line-height: 1.5;
-                padding: 4em 1em;
-                font: 1.1rem/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-                color: var(--light-font);
-                text-align: justify;
-                font-family: var(--secondary-font);
-                background: var(--bg-color);
+                color: #ddd;
+                background-color: #222;
             }
-            a:link{ color: var(--light-font); }
-            a:visited{ color: #9e9e9e; }
+
+            a:link {
+                color: #ddd;
+            }
+
+            a:visited {
+                color: #666;
+            }
+
             a.main-url {
-                margin-right: 1em;
-                color: var(--light-font);
-                font-family: var(--primary-font);
-            }
-            a.footer-url { margin-right: 1em; }
-            .ref-url { line-height: 0.8em; }
-            .writing-header { text-align: left; }
-            h1,h2,h3 {
-                margin-top: 1em;
-                padding-top: 1em;
-                font-weight: normal;
-                font-family: var(--primary-font);
-            }
-            h1,h2,h3,strong { color: #444; }
-            .footer {
-                text-align:center;
-                font-size: 0.8em;
-                padding-top: 3.4em;
-                color: #9e9e9e;
-            }
-            .image-container {
-                height: 5em;
-                width: 5em;
-                background-size: contain;
-                border-radius: 50%;
-            }
-            span.math {
-                font-style: italic;
-                font-family: Times New Roman;
+                color: #fff;
             }
 
             code {
-                background-color: #f8e9de;
-                padding: 0 2;
-                border-radius: 0.2em;
+                background-color: #333;
             }
 
-            @media (prefers-color-scheme: dark) {
-                body { color: #ddd; background-color: #222; }
-                a:link{ color: #ddd; }
-                a:visited{ color: #666; }
-                a.main-url { color: #fff; }
-                code { background-color: #333; }
-                h1,h2,h3,strong { color: #fff; }
-                .footer { color: #666; }
+            h1,
+            h2,
+            h3,
+            strong {
+                color: #fff;
             }
-        </style>
-        
-    </head>
 
-    <body>
-        <a class="main-url" href="/">about</a>
-        <a class="main-url" href="/writing.html">writing</a>
-        <a class="main-url" href="/reading.html">reading</a>
+            .note {
+                background-color: #2a2a2a;
+                border-left-color: #444;
+                color: #ddd;
+            }
 
-        
+            .footer {
+                color: #666;
+            }
+        }
+    </style>
+    
+</head>
+
+<body>
+    <a class="main-url" href="/">about</a>
+    <a class="main-url" href="/writing.html">writing</a>
+    <a class="main-url" href="/reading.html">reading</a>
+
+    
     <h2 class="writing-header">Writing a more efficient orderbook</h2>
     <p>
     It's been just over a year since I last wrote a simple order-book<a id="ref-1" href="#1"><sup>[1]</sup></a> and
@@ -231,6 +304,7 @@
     </p>
 
 
-        <p class="footer">Built with <a href="https://github.com/JakeBamrah/temple">temple</a></p>
-    </body>
+    <p class="footer">Built with <a href="https://github.com/JakeBamrah/temple">temple</a></p>
+</body>
+
 </html>
